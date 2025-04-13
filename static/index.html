@@ -270,10 +270,15 @@
           body: JSON.stringify({ text: newText })
         });
         if (response.ok) {
-          // Update the displayed note text.
+          // Update the displayed note text in the current context.
           document.getElementById(`note-text-${noteId}`).innerText = newText;
           messageDiv.innerHTML = '<div class="message success">Updated successfully!</div>';
-          // Hide the edit form and show the edit button after a short delay.
+
+          // Refresh both the recent entries and all entries list.
+          await loadRecentEntries();
+          await loadAllEntries();
+
+          // Hide the edit form after a short delay.
           setTimeout(() => {
             cancelEdit(noteId);
           }, 1000);
@@ -285,6 +290,7 @@
         messageDiv.innerHTML = '<div class="message error">Error updating note.</div>';
       }
     }
+
 
     // Load recent and all entries on page load.
     window.addEventListener("load", () => {
