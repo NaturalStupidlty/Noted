@@ -1,8 +1,7 @@
 import logging
 import os
 from datetime import datetime
-from typing import List, Tuple
-
+from typing import List, Tuple, Optional
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -139,6 +138,15 @@ def get_frontend():
 	return FileResponse("static/index.html")
 
 
+@app.get("/topics", response_model=List[str])
+def get_topics():
+    """
+    Retrieve all unique topics from the indexed notes.
+    """
+    topics = get_unique_topics()
+    return topics
+
+
 @app.post("/notes", response_model=NoteOut)
 def create_note(note: NoteCreate):
 	"""
@@ -261,23 +269,27 @@ def get_recent_notes(n: int = Query(5, description="Number of recent notes to re
 	notes = [NoteOut(**hit.get("_source", {})) for hit in hits]
 	return notes
 
-
 @app.get("/notes/all", response_model=List[NoteOut])
-def get_all_notes():
-	"""
-	Retrieve all notes from Elasticsearch.
-	"""
-	search_query = {"query": {"match_all": {}}}
-	try:
-		response = es.search(index=INDEX_NAME, body=search_query, scroll='2m')
-	except Exception as e:
-		logging.exception("Elasticsearch search for all notes failed")
-		raise HTTPException(status_code=500, detail=f"Elasticsearch search failed: {e}")
+def get_all_notes(topic: Optional[str] = None):
+    """
+    Retrieve all notes from Elasticsearch. If a topic is provided,
+    only return notes that match that tag.
+    """
+    if topic:
+        search_query = {"query": {"term": {"topic": topic.lower()}}}
+        logging.debug("Fetching notes for topic: %s", topic)
+    else:
+        search_query = {"query": {"match_all": {}}}
 
-	hits = response.get("hits", {}).get("hits", [])
-	notes = [NoteOut(**hit.get("_source", {})) for hit in hits]
-	return notes
+    try:
+        response = es.search(index=INDEX_NAME, body=search_query, scroll='2m')
+    except Exception as e:
+        logging.exception("Elasticsearch search for all notes failed")
+        raise HTTPException(status_code=500, detail=f"Elasticsearch search failed: {e}")
 
+    hits = response.get("hits", {}).get("hits", [])
+    notes = [NoteOut(**hit.get("_source", {})) for hit in hits]
+    return notes
 
 @app.get("/notes/search", response_model=List[NoteOut])
 def search_notes(

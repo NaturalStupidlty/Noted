@@ -42,7 +42,7 @@
     }
 
     /* Form Elements */
-    textarea, input[type="text"] {
+    textarea, input[type="text"], select {
       width: 100%;
       padding: 10px;
       font-size: 16px;
@@ -135,10 +135,17 @@
       </div>
     </div>
 
-    <!-- All Entries Section (Separate lists for Notes and Todos with Filters) -->
-    <div class="section" id="all-entries-section">
-      <h2>All Entries</h2>
-      <!-- Checkbox Filters -->
+    <!-- Filter Section -->
+    <div class="section" id="filter-section">
+      <h2>Filter Entries</h2>
+      <!-- Dropdown for topic filtering -->
+      <div class="filter-options">
+        <label for="topic-select">Select Topic: </label>
+        <select id="topic-select">
+          <option value="">All Topics</option>
+        </select>
+      </div>
+      <!-- Checkbox Filters for Notes and Todos -->
       <div class="filter-options">
         <label>
           <input type="checkbox" id="filter-notes" checked> Show Notes
@@ -147,6 +154,11 @@
           <input type="checkbox" id="filter-todos" checked> Show Todos
         </label>
       </div>
+    </div>
+
+    <!-- All Entries Section -->
+    <div class="section" id="all-entries-section">
+      <h2>All Entries</h2>
       <!-- Note Category Container -->
       <div class="entry-category" id="notes-category">
         <h3>Notes</h3>
@@ -182,10 +194,32 @@
       return li;
     }
 
-    // Global variable to store all entries, so we can filter without extra API calls.
+    // Global variable to store all entries.
     let allEntriesData = [];
 
-    // Load recent entries (common list for both Notes and Todos)
+    // Load topics for the dropdown.
+    async function loadTopics() {
+      try {
+        const response = await fetch("/topics?ts=" + Date.now(), { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to fetch topics.");
+        }
+        const topics = await response.json();
+        const topicSelect = document.getElementById("topic-select");
+        // Clear existing options except the default "All Topics"
+        topicSelect.innerHTML = '<option value="">All Topics</option>';
+        topics.forEach(topic => {
+          const option = document.createElement("option");
+          option.value = topic;
+          option.textContent = topic.charAt(0).toUpperCase() + topic.slice(1);
+          topicSelect.appendChild(option);
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    // Load recent entries (common list for both Notes and Todos).
     async function loadRecentEntries() {
       try {
         const response = await fetch("/notes/recent?ts=" + Date.now(), { cache: "no-store" });
@@ -203,10 +237,15 @@
       }
     }
 
-    // Load all entries and then display filtered categories.
+    // Load all entries based on the selected topic filter.
     async function loadAllEntries() {
       try {
-        const response = await fetch("/notes/all?ts=" + Date.now(), { cache: "no-store" });
+        // Get selected topic from the dropdown. If no topic is selected, it will be an empty string.
+        const selectedTopic = document.getElementById("topic-select").value;
+        const url = selectedTopic
+          ? `/notes/all?topic=${encodeURIComponent(selectedTopic)}&ts=${Date.now()}`
+          : `/notes/all?ts=${Date.now()}`;
+        const response = await fetch(url, { cache: "no-store" });
         if (!response.ok) {
           throw new Error("Failed to fetch all entries.");
         }
@@ -217,7 +256,7 @@
       }
     }
 
-    // Display filtered entries based on checkboxes.
+    // Display filtered entries based on both dropdown and checkbox selections.
     function displayFilteredEntries() {
       const showNotes = document.getElementById("filter-notes").checked;
       const showTodos = document.getElementById("filter-todos").checked;
@@ -233,7 +272,6 @@
       const filteredNotes = allEntriesData.filter(entry => entry.note_type !== "todo");
       const filteredTodos = allEntriesData.filter(entry => entry.note_type === "todo");
 
-      // Show and populate the Notes section only if checkbox is checked and there is at least one note.
       if (showNotes && filteredNotes.length > 0) {
         notesContainer.style.display = "block";
         filteredNotes.forEach(entry => {
@@ -243,7 +281,6 @@
         notesContainer.style.display = "none";
       }
 
-      // Show and populate the Todos section only if checkbox is checked and there is at least one todo.
       if (showTodos && filteredTodos.length > 0) {
         todosContainer.style.display = "block";
         filteredTodos.forEach(entry => {
@@ -254,7 +291,7 @@
       }
     }
 
-    // Load search results (editable as well)
+    // Load search results.
     async function loadSearchResults(query) {
       try {
         const response = await fetch("/notes/search?query=" + encodeURIComponent(query));
@@ -274,7 +311,7 @@
       }
     }
 
-    // Edit related functions
+    // Edit related functions.
     function startEdit(noteId) {
       const editButton = document.getElementById(`edit-button-${noteId}`);
       if (editButton) {
@@ -310,11 +347,8 @@
         if (response.ok) {
           document.getElementById(`note-text-${noteId}`).innerText = newText;
           messageDiv.innerHTML = '<div class="message success">Updated successfully!</div>';
-
-          // Refresh both the recent entries and all entries list.
           await loadRecentEntries();
           await loadAllEntries();
-
           setTimeout(() => {
             cancelEdit(noteId);
           }, 1000);
@@ -327,27 +361,25 @@
       }
     }
 
-    // Event listener to trigger filtering when checkboxes are toggled.
+    // Event listeners.
     document.getElementById("filter-notes").addEventListener("change", displayFilteredEntries);
     document.getElementById("filter-todos").addEventListener("change", displayFilteredEntries);
+    document.getElementById("topic-select").addEventListener("change", loadAllEntries);
 
-    // Load recent and all entries on page load.
     window.addEventListener("load", () => {
+      loadTopics();
       loadRecentEntries();
       loadAllEntries();
     });
 
-    // Add new entry and trigger automatic refresh.
     document.getElementById("add-note-form").addEventListener("submit", async function(event) {
       event.preventDefault();
       const noteText = document.getElementById("note-text").value.trim();
       const messageDiv = document.getElementById("add-note-message");
-
       if (!noteText) {
         messageDiv.innerHTML = '<div class="message error">Please enter some text.</div>';
         return;
       }
-
       try {
         const response = await fetch("/notes", {
           method: "POST",
@@ -357,7 +389,6 @@
         if (response.ok) {
           messageDiv.innerHTML = '<div class="message success">Entry added successfully!</div>';
           document.getElementById("note-text").value = "";
-          // Refresh the recent and all entries after adding a new entry.
           await loadRecentEntries();
           await loadAllEntries();
         } else {
@@ -368,7 +399,6 @@
       }
     });
 
-    // Search for entries and display a common list for search results.
     document.getElementById("search-form").addEventListener("submit", async function(event) {
       event.preventDefault();
       const query = document.getElementById("search-query").value.trim();
