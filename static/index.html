@@ -91,6 +91,12 @@
       background-color: #f8d7da;
       color: #721c24;
     }
+
+    /* Checkbox Filters */
+    .filter-options label {
+      margin-right: 15px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
@@ -129,14 +135,25 @@
       </div>
     </div>
 
-    <!-- All Entries Section (Separate lists for Notes and Todos) -->
+    <!-- All Entries Section (Separate lists for Notes and Todos with Filters) -->
     <div class="section" id="all-entries-section">
       <h2>All Entries</h2>
-      <div class="entry-category">
+      <!-- Checkbox Filters -->
+      <div class="filter-options">
+        <label>
+          <input type="checkbox" id="filter-notes" checked> Show Notes
+        </label>
+        <label>
+          <input type="checkbox" id="filter-todos" checked> Show Todos
+        </label>
+      </div>
+      <!-- Note Category Container -->
+      <div class="entry-category" id="notes-category">
         <h3>Notes</h3>
         <ul id="all-notes-list"></ul>
       </div>
-      <div class="entry-category">
+      <!-- Todo Category Container -->
+      <div class="entry-category" id="todos-category">
         <h3>Todos</h3>
         <ul id="all-todos-list"></ul>
       </div>
@@ -146,11 +163,8 @@
   <script>
     // Helper function to render a note entry with edit functionality.
     function renderNoteEntry(entry) {
-      // Create a list item and set its data attribute for the note id.
       const li = document.createElement("li");
       li.dataset.noteId = entry.id;
-
-      // Include the note metadata, text, an inline edit form, and an edit button with a unique ID.
       li.innerHTML = `
         <strong>${new Date(entry.created_at).toLocaleString()}</strong>
         <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
@@ -167,6 +181,9 @@
       `;
       return li;
     }
+
+    // Global variable to store all entries, so we can filter without extra API calls.
+    let allEntriesData = [];
 
     // Load recent entries (common list for both Notes and Todos)
     async function loadRecentEntries() {
@@ -186,28 +203,54 @@
       }
     }
 
-    // Load all entries (separates Notes and Todos)
+    // Load all entries and then display filtered categories.
     async function loadAllEntries() {
       try {
         const response = await fetch("/notes/all?ts=" + Date.now(), { cache: "no-store" });
         if (!response.ok) {
           throw new Error("Failed to fetch all entries.");
         }
-        const entries = await response.json();
-        const allNotesList = document.getElementById("all-notes-list");
-        const allTodosList = document.getElementById("all-todos-list");
-        allNotesList.innerHTML = "";
-        allTodosList.innerHTML = "";
-        entries.forEach(entry => {
-          const listItem = renderNoteEntry(entry);
-          if (entry.note_type === "todo") {
-            allTodosList.appendChild(listItem);
-          } else {
-            allNotesList.appendChild(listItem);
-          }
-        });
+        allEntriesData = await response.json();
+        displayFilteredEntries();
       } catch (error) {
         console.error(error);
+      }
+    }
+
+    // Display filtered entries based on checkboxes.
+    function displayFilteredEntries() {
+      const showNotes = document.getElementById("filter-notes").checked;
+      const showTodos = document.getElementById("filter-todos").checked;
+
+      const notesContainer = document.getElementById("notes-category");
+      const todosContainer = document.getElementById("todos-category");
+      const allNotesList = document.getElementById("all-notes-list");
+      const allTodosList = document.getElementById("all-todos-list");
+
+      allNotesList.innerHTML = "";
+      allTodosList.innerHTML = "";
+
+      const filteredNotes = allEntriesData.filter(entry => entry.note_type !== "todo");
+      const filteredTodos = allEntriesData.filter(entry => entry.note_type === "todo");
+
+      // Show and populate the Notes section only if checkbox is checked and there is at least one note.
+      if (showNotes && filteredNotes.length > 0) {
+        notesContainer.style.display = "block";
+        filteredNotes.forEach(entry => {
+          allNotesList.appendChild(renderNoteEntry(entry));
+        });
+      } else {
+        notesContainer.style.display = "none";
+      }
+
+      // Show and populate the Todos section only if checkbox is checked and there is at least one todo.
+      if (showTodos && filteredTodos.length > 0) {
+        todosContainer.style.display = "block";
+        filteredTodos.forEach(entry => {
+          allTodosList.appendChild(renderNoteEntry(entry));
+        });
+      } else {
+        todosContainer.style.display = "none";
       }
     }
 
@@ -232,24 +275,19 @@
     }
 
     // Edit related functions
-
     function startEdit(noteId) {
-      // Hide the edit button.
       const editButton = document.getElementById(`edit-button-${noteId}`);
       if (editButton) {
         editButton.style.display = 'none';
       }
-      // Show the edit form and hide the note text span.
       document.getElementById(`edit-form-${noteId}`).style.display = 'block';
       document.getElementById(`note-text-${noteId}`).style.display = 'none';
     }
 
     function cancelEdit(noteId) {
-      // Hide the edit form and display the original note text.
       document.getElementById(`edit-form-${noteId}`).style.display = 'none';
       document.getElementById(`note-text-${noteId}`).style.display = 'inline';
       document.getElementById(`edit-message-${noteId}`).innerHTML = '';
-      // Show the edit button again.
       const editButton = document.getElementById(`edit-button-${noteId}`);
       if (editButton) {
         editButton.style.display = 'inline';
@@ -270,7 +308,6 @@
           body: JSON.stringify({ text: newText })
         });
         if (response.ok) {
-          // Update the displayed note text in the current context.
           document.getElementById(`note-text-${noteId}`).innerText = newText;
           messageDiv.innerHTML = '<div class="message success">Updated successfully!</div>';
 
@@ -278,7 +315,6 @@
           await loadRecentEntries();
           await loadAllEntries();
 
-          // Hide the edit form after a short delay.
           setTimeout(() => {
             cancelEdit(noteId);
           }, 1000);
@@ -291,6 +327,9 @@
       }
     }
 
+    // Event listener to trigger filtering when checkboxes are toggled.
+    document.getElementById("filter-notes").addEventListener("change", displayFilteredEntries);
+    document.getElementById("filter-todos").addEventListener("change", displayFilteredEntries);
 
     // Load recent and all entries on page load.
     window.addEventListener("load", () => {
