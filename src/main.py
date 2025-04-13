@@ -182,12 +182,63 @@ def create_note(note: NoteCreate):
 	}
 
 	try:
-		es.index(index=INDEX_NAME, id=new_id, body=doc)
+		es.index(index=INDEX_NAME, id=new_id, body=doc, refresh="wait_for")
 	except Exception as e:
 		logging.exception("Failed to index note in Elasticsearch")
 		raise HTTPException(status_code=500, detail=f"Elasticsearch indexing failed: {e}")
 
 	return NoteOut(**doc)
+
+
+@app.put("/notes/{note_id}", response_model=NoteOut)
+def update_note(note_id: int, note: NoteCreate):
+	"""
+	Update a note with new text. This endpoint reclassifies the note and
+	recomputes its embedding before updating it in Elasticsearch.
+	"""
+	# Check if the note exists.
+	try:
+		existing_note = es.get(index=INDEX_NAME, id=note_id)["_source"]
+	except NotFoundError:
+		raise HTTPException(status_code=404, detail="Note not found.")
+	except Exception as e:
+		logging.exception("Error fetching note")
+		raise HTTPException(status_code=500, detail=f"Error fetching note: {e}")
+
+	# Reclassify the updated note.
+	note_type, topic = classify_and_tag_note(note.text)
+	logging.info("Updated note classified as '%s' with topic '%s'", note_type, topic)
+
+	# Recompute the embedding for the new text.
+	try:
+		embedding_response = client.embeddings.create(
+			input=note.text,
+			model="text-embedding-ada-002"
+		)
+		embedding_vector = embedding_response.data[0].embedding
+	except Exception as e:
+		logging.exception("Embedding generation failed")
+		raise HTTPException(status_code=500, detail=f"Embedding generation failed: {e}")
+
+	# Build the update document.
+	update_doc = {
+		"doc": {
+			"text": note.text,
+			"note_type": note_type,
+			"topic": topic,
+			"embedding": embedding_vector,
+			# Optionally, you could add an "updated_at" timestamp here.
+		}
+	}
+
+	try:
+		es.update(index=INDEX_NAME, id=note_id, body=update_doc, refresh="wait_for")
+		updated_note = es.get(index=INDEX_NAME, id=note_id)["_source"]
+	except Exception as e:
+		logging.exception("Failed to update note in Elasticsearch")
+		raise HTTPException(status_code=500, detail=f"Elasticsearch update failed: {e}")
+
+	return NoteOut(**updated_note)
 
 
 @app.get("/notes/recent", response_model=List[NoteOut])
@@ -323,7 +374,7 @@ def search_notes(
 			continue
 
 	if not candidate_notes:
-		logging.error("No candidate notes found for LLM filtering.")
+		logging.warning("No candidate notes found for LLM filtering.")
 		return []
 
 	notes_context = "\n".join(context_lines)
@@ -331,16 +382,16 @@ def search_notes(
 
 	try:
 		llm_response = client.responses.create(
-			model="gpt-3.5-turbo",
-			instructions="""You are a helpful assistant that filters candidate notes based on relevance.
-Each note is provided in the format 'id: note text'.
-Return only the IDs of the notes (as integers) that are highly relevant to the query.
-Return the numbers as a comma-separated list (e.g., "1,3,5"), with no additional text.""",
+			model="gpt-4o-mini",
+			instructions="""You must filter candidate notes based on relevance.
+			Each note is provided in the format 'id: note text'.
+			Return only the IDs of the notes (as integers) that are highly relevant to the query.
+			Return the numbers as a comma-separated list (e.g., "1,3,5"), with no additional text.""",
 			input=f"""Candidate Notes:
-{notes_context}
-
-User Query: "{query}"
-""",
+			{notes_context}
+			
+			User Query: "{query}"
+			""",
 			max_output_tokens=100,
 		)
 		result_text = llm_response.output_text
@@ -359,7 +410,7 @@ User Query: "{query}"
 	filtered_notes = [note for note in candidate_notes if note.id in filtered_ids]
 	logging.debug("Final filtered notes: %s", filtered_notes)
 	if not filtered_notes:
-		logging.error("No relevant notes found after LLM filtering. Filtered IDs: %s", filtered_ids)
-		raise HTTPException(status_code=404, detail="No relevant notes found after filtering.")
+		logging.warning("No relevant notes found after LLM filtering. Filtered IDs: %s", filtered_ids)
+		return []
 
 	return filtered_notes

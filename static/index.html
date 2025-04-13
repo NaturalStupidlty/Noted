@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LLM Note-Taking App</title>
+  <title>LLM Note-Taking App - Editable Notes</title>
   <style>
     /* Global Styles */
     body {
@@ -144,31 +144,50 @@
   </div>
 
   <script>
-    // Function to load recent entries (common list)
-// Updated loadRecentEntries to bust cache
-async function loadRecentEntries() {
-  try {
-    const response = await fetch("/notes/recent?ts=" + Date.now(), { cache: "no-store" });
-    if (!response.ok) {
-      throw new Error("Failed to fetch recent entries.");
-    }
-    const entries = await response.json();
-    const recentList = document.getElementById("recent-list");
-    recentList.innerHTML = "";
-
-    entries.forEach(entry => {
+    // Helper function to render a note entry with edit functionality.
+    function renderNoteEntry(entry) {
+      // Create a list item and set its data attribute for the note id.
       const li = document.createElement("li");
-      li.innerHTML = `<strong>${new Date(entry.created_at).toLocaleString()}</strong>
-                      <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
-                      <br>${entry.text}`;
-      recentList.appendChild(li);
-    });
-  } catch (error) {
-    console.error(error);
-  }
-}
+      li.dataset.noteId = entry.id;
 
-    // Similar update for loadAllEntries:
+      // The HTML includes the note metadata, text and an inline edit form.
+      li.innerHTML = `
+        <strong>${new Date(entry.created_at).toLocaleString()}</strong>
+        <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
+        <br>
+        <span id="note-text-${entry.id}">${entry.text}</span>
+        <button onclick="startEdit(${entry.id})" style="margin-left:10px;">Edit</button>
+        <div id="edit-form-${entry.id}" style="display:none; margin-top:10px;">
+          <textarea id="edit-text-${entry.id}" rows="4">${entry.text}</textarea>
+          <br>
+          <button onclick="saveEdit(${entry.id})">Save</button>
+          <button onclick="cancelEdit(${entry.id})">Cancel</button>
+          <div id="edit-message-${entry.id}"></div>
+        </div>
+      `;
+      return li;
+    }
+
+    // Load recent entries (common list for both Notes and Todos)
+    async function loadRecentEntries() {
+      try {
+        const response = await fetch("/notes/recent?ts=" + Date.now(), { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to fetch recent entries.");
+        }
+        const entries = await response.json();
+        const recentList = document.getElementById("recent-list");
+        recentList.innerHTML = "";
+
+        entries.forEach(entry => {
+          recentList.appendChild(renderNoteEntry(entry));
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    // Load all entries (separates Notes and Todos)
     async function loadAllEntries() {
       try {
         const response = await fetch("/notes/all?ts=" + Date.now(), { cache: "no-store" });
@@ -183,14 +202,11 @@ async function loadRecentEntries() {
         allTodosList.innerHTML = "";
 
         entries.forEach(entry => {
-          const li = document.createElement("li");
-          li.innerHTML = `<strong>${new Date(entry.created_at).toLocaleString()}</strong>
-                          <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
-                          <br>${entry.text}`;
+          const listItem = renderNoteEntry(entry);
           if (entry.note_type === "todo") {
-            allTodosList.appendChild(li);
+            allTodosList.appendChild(listItem);
           } else {
-            allNotesList.appendChild(li);
+            allNotesList.appendChild(listItem);
           }
         });
       } catch (error) {
@@ -198,6 +214,69 @@ async function loadRecentEntries() {
       }
     }
 
+    // Load search results (editable as well)
+    async function loadSearchResults(query) {
+      try {
+        const response = await fetch("/notes/search?query=" + encodeURIComponent(query));
+        if (!response.ok) {
+          throw new Error("Search failed.");
+        }
+        const entries = await response.json();
+        const searchAllList = document.getElementById("search-all-list");
+        searchAllList.innerHTML = "";
+        entries.forEach(entry => {
+          searchAllList.appendChild(renderNoteEntry(entry));
+        });
+        document.getElementById("search-message").innerHTML = "";
+      } catch (error) {
+        console.error(error);
+        document.getElementById("search-message").innerHTML = '<div class="message error">Search failed.</div>';
+      }
+    }
+
+    // Edit related functions
+    function startEdit(noteId) {
+      // Show the edit form and hide the note text span.
+      document.getElementById(`edit-form-${noteId}`).style.display = 'block';
+      document.getElementById(`note-text-${noteId}`).style.display = 'none';
+    }
+
+    function cancelEdit(noteId) {
+      // Hide the edit form and display the original note text.
+      document.getElementById(`edit-form-${noteId}`).style.display = 'none';
+      document.getElementById(`note-text-${noteId}`).style.display = 'inline';
+      document.getElementById(`edit-message-${noteId}`).innerHTML = '';
+    }
+
+    async function saveEdit(noteId) {
+      const newText = document.getElementById(`edit-text-${noteId}`).value.trim();
+      const messageDiv = document.getElementById(`edit-message-${noteId}`);
+      if (!newText) {
+        messageDiv.innerHTML = '<div class="message error">Please enter some text.</div>';
+        return;
+      }
+      try {
+        const response = await fetch(`/notes/${noteId}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: newText })
+        });
+        if (response.ok) {
+          // Update the displayed note text.
+          document.getElementById(`note-text-${noteId}`).innerText = newText;
+          messageDiv.innerHTML = '<div class="message success">Updated successfully!</div>';
+          // Hide the edit form after a short delay.
+          setTimeout(() => {
+            cancelEdit(noteId);
+          }, 1000);
+        } else {
+          messageDiv.innerHTML = '<div class="message error">Error updating note.</div>';
+        }
+      } catch (error) {
+        console.error(error);
+        messageDiv.innerHTML = '<div class="message error">Error updating note.</div>';
+      }
+    }
 
     // Load recent and all entries on page load.
     window.addEventListener("load", () => {
@@ -224,7 +303,7 @@ async function loadRecentEntries() {
         });
 
         if (response.ok) {
-          messageDiv.innerHTML = '<div class="message success"">Entry added successfully!</div>';
+          messageDiv.innerHTML = '<div class="message success">Entry added successfully!</div>';
           document.getElementById("note-text").value = "";
           // Refresh the recent and all entries after adding a new one.
           await loadRecentEntries();
@@ -241,34 +320,11 @@ async function loadRecentEntries() {
     document.getElementById("search-form").addEventListener("submit", async function(event) {
       event.preventDefault();
       const query = document.getElementById("search-query").value.trim();
-      const searchMessage = document.getElementById("search-message");
-
       if (!query) {
-        searchMessage.innerHTML = '<div class="message error">Please enter a search query.</div>';
+        document.getElementById("search-message").innerHTML = '<div class="message error">Please enter a search query.</div>';
         return;
       }
-
-      try {
-        const response = await fetch("/notes/search?query=" + encodeURIComponent(query));
-        if (!response.ok) {
-          throw new Error("Search failed.");
-        }
-        const entries = await response.json();
-        const searchAllList = document.getElementById("search-all-list");
-        searchAllList.innerHTML = "";
-
-        entries.forEach(entry => {
-          const li = document.createElement("li");
-          li.innerHTML = `<strong>${new Date(entry.created_at).toLocaleString()}</strong>
-                          <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
-                          <br>${entry.text}`;
-          searchAllList.appendChild(li);
-        });
-        searchMessage.innerHTML = "";
-      } catch (error) {
-        console.error(error);
-        searchMessage.innerHTML = '<div class="message error">Search failed.</div>';
-      }
+      await loadSearchResults(query);
     });
   </script>
 </body>
