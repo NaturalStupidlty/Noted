@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LLM Note-Taking App - Editable Notes</title>
+  <title>Noted</title>
   <style>
     /* Global Styles */
     body {
@@ -19,7 +19,6 @@
     h1, h2, h3 {
       color: #212529;
     }
-
     /* Section/Card Styles */
     .section {
       background-color: #fff;
@@ -40,7 +39,6 @@
     .section button:hover {
       background-color: #0056b3;
     }
-
     /* Form Elements */
     textarea, input[type="text"], select {
       width: 100%;
@@ -50,7 +48,6 @@
       border-radius: 4px;
       margin-bottom: 10px;
     }
-
     /* Lists and Items */
     ul {
       list-style-type: none;
@@ -67,7 +64,6 @@
       font-size: 14px;
       color: #6c757d;
     }
-
     /* Entry Category Headings */
     .entry-category h3 {
       margin-top: 0;
@@ -75,7 +71,6 @@
       display: inline-block;
       padding-bottom: 5px;
     }
-
     /* Message Styles */
     .message {
       padding: 10px;
@@ -91,7 +86,6 @@
       background-color: #f8d7da;
       color: #721c24;
     }
-
     /* Checkbox Filters */
     .filter-options label {
       margin-right: 15px;
@@ -101,6 +95,7 @@
 </head>
 <body>
   <div class="container">
+    <!-- Title -->
     <h1 style="text-align: center; font-size: 3em">Noted</h1>
 
     <!-- Add Entry Section -->
@@ -113,40 +108,29 @@
       <div id="add-note-message"></div>
     </div>
 
-    <!-- Recent Entries Section (Common list for both Notes and Todos) -->
+    <!-- Recent Entries Section -->
     <div class="section" id="recent-section">
-      <div class="entry-category">
-        <h3>Recent</h3>
-        <ul id="recent-list"></ul>
-      </div>
+      <h2>Recent Entries</h2>
+      <ul id="recent-list"></ul>
     </div>
 
-    <!-- Search Section (Common list for search results) -->
-    <div class="section" id="search-section">
-      <h2>Search Entries</h2>
+    <!-- Unified Search & Filter Section -->
+    <div class="section" id="search-filter-section">
+      <h2>Search</h2>
+      <!-- Search Form -->
       <form id="search-form">
-        <input type="text" id="search-query" placeholder="Enter search query..." />
+        <input type="text" id="search-query" placeholder="Enter search query (or leave empty to filter all entries)..." />
         <button type="submit">Search</button>
       </form>
       <div id="search-message"></div>
-      <div class="entry-category">
-        <h3 style="padding: 20px 0;">Search Results</h3>
-        <ul id="search-all-list"></ul>
-      </div>
-    </div>
-
-    <!-- Filter Section -->
-    <div class="section" id="filter-section">
-      <h2>Filter Entries</h2>
-      <!-- Dropdown for topic filtering -->
-      <div class="filter-options">
+      <!-- Filter Options -->
+      <div class="filter-options" style="margin-top: 20px;">
         <label for="topic-select">Select Topic: </label>
         <select id="topic-select">
           <option value="">All Topics</option>
         </select>
       </div>
-      <!-- Checkbox Filters for Notes and Todos -->
-      <div class="filter-options">
+      <div class="filter-options" style="margin-bottom: 20px;">
         <label>
           <input type="checkbox" id="filter-notes" checked> Show Notes
         </label>
@@ -154,17 +138,11 @@
           <input type="checkbox" id="filter-todos" checked> Show Todos
         </label>
       </div>
-    </div>
-
-    <!-- All Entries Section -->
-    <div class="section" id="all-entries-section">
-      <h2>All Entries</h2>
-      <!-- Note Category Container -->
+      <!-- Results Display -->
       <div class="entry-category" id="notes-category">
         <h3>Notes</h3>
         <ul id="all-notes-list"></ul>
       </div>
-      <!-- Todo Category Container -->
       <div class="entry-category" id="todos-category">
         <h3>Todos</h3>
         <ul id="all-todos-list"></ul>
@@ -194,7 +172,7 @@
       return li;
     }
 
-    // Global variable to store all entries.
+    // Global variable to store the currently loaded entries.
     let allEntriesData = [];
 
     // Load topics for the dropdown.
@@ -219,28 +197,9 @@
       }
     }
 
-    // Load recent entries (common list for both Notes and Todos).
-    async function loadRecentEntries() {
+    // Load all entries (with an optional topic filter).
+    async function loadAllEntriesUnified() {
       try {
-        const response = await fetch("/notes/recent?ts=" + Date.now(), { cache: "no-store" });
-        if (!response.ok) {
-          throw new Error("Failed to fetch recent entries.");
-        }
-        const entries = await response.json();
-        const recentList = document.getElementById("recent-list");
-        recentList.innerHTML = "";
-        entries.forEach(entry => {
-          recentList.appendChild(renderNoteEntry(entry));
-        });
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
-    // Load all entries based on the selected topic filter.
-    async function loadAllEntries() {
-      try {
-        // Get selected topic from the dropdown. If no topic is selected, it will be an empty string.
         const selectedTopic = document.getElementById("topic-select").value;
         const url = selectedTopic
           ? `/notes/all?topic=${encodeURIComponent(selectedTopic)}&ts=${Date.now()}`
@@ -256,7 +215,33 @@
       }
     }
 
-    // Display filtered entries based on both dropdown and checkbox selections.
+    // Load search results.
+    async function loadSearchResultsUnified(query) {
+      try {
+        const response = await fetch(`/notes/search?query=${encodeURIComponent(query)}&ts=${Date.now()}`);
+        if (!response.ok) {
+          throw new Error("Search failed.");
+        }
+        allEntriesData = await response.json();
+        displayFilteredEntries();
+        document.getElementById("search-message").innerHTML = "";
+      } catch (error) {
+        console.error(error);
+        document.getElementById("search-message").innerHTML = '<div class="message error">Search failed.</div>';
+      }
+    }
+
+    // Unified update function: if a search query exists, run search; otherwise, load all entries.
+    function updateEntries() {
+      const query = document.getElementById("search-query").value.trim();
+      if (query) {
+        loadSearchResultsUnified(query);
+      } else {
+        loadAllEntriesUnified();
+      }
+    }
+
+    // Display filtered entries based on the checkbox selections.
     function displayFilteredEntries() {
       const showNotes = document.getElementById("filter-notes").checked;
       const showTodos = document.getElementById("filter-todos").checked;
@@ -291,32 +276,27 @@
       }
     }
 
-    // Load search results.
-    async function loadSearchResults(query) {
+    // Load recent entries (using a dedicated endpoint).
+    async function loadRecentEntries() {
       try {
-        const response = await fetch("/notes/search?query=" + encodeURIComponent(query));
+        const response = await fetch("/notes/recent?ts=" + Date.now(), { cache: "no-store" });
         if (!response.ok) {
-          throw new Error("Search failed.");
+          throw new Error("Failed to fetch recent entries.");
         }
         const entries = await response.json();
-        const searchAllList = document.getElementById("search-all-list");
-        searchAllList.innerHTML = "";
+        const recentList = document.getElementById("recent-list");
+        recentList.innerHTML = "";
         entries.forEach(entry => {
-          searchAllList.appendChild(renderNoteEntry(entry));
+          recentList.appendChild(renderNoteEntry(entry));
         });
-        document.getElementById("search-message").innerHTML = "";
       } catch (error) {
         console.error(error);
-        document.getElementById("search-message").innerHTML = '<div class="message error">Search failed.</div>';
       }
     }
 
     // Edit related functions.
     function startEdit(noteId) {
-      const editButton = document.getElementById(`edit-button-${noteId}`);
-      if (editButton) {
-        editButton.style.display = 'none';
-      }
+      document.getElementById(`edit-button-${noteId}`).style.display = 'none';
       document.getElementById(`edit-form-${noteId}`).style.display = 'block';
       document.getElementById(`note-text-${noteId}`).style.display = 'none';
     }
@@ -325,10 +305,7 @@
       document.getElementById(`edit-form-${noteId}`).style.display = 'none';
       document.getElementById(`note-text-${noteId}`).style.display = 'inline';
       document.getElementById(`edit-message-${noteId}`).innerHTML = '';
-      const editButton = document.getElementById(`edit-button-${noteId}`);
-      if (editButton) {
-        editButton.style.display = 'inline';
-      }
+      document.getElementById(`edit-button-${noteId}`).style.display = 'inline';
     }
 
     async function saveEdit(noteId) {
@@ -347,8 +324,7 @@
         if (response.ok) {
           document.getElementById(`note-text-${noteId}`).innerText = newText;
           messageDiv.innerHTML = '<div class="message success">Updated successfully!</div>';
-          await loadRecentEntries();
-          await loadAllEntries();
+          updateEntries();
           setTimeout(() => {
             cancelEdit(noteId);
           }, 1000);
@@ -361,17 +337,29 @@
       }
     }
 
-    // Event listeners.
+    // Event listeners for the unified section.
+    document.getElementById("search-form").addEventListener("submit", function(event) {
+      event.preventDefault();
+      updateEntries();
+    });
+    document.getElementById("topic-select").addEventListener("change", function() {
+      if (!document.getElementById("search-query").value.trim()) {
+        updateEntries();
+      } else {
+        displayFilteredEntries();
+      }
+    });
     document.getElementById("filter-notes").addEventListener("change", displayFilteredEntries);
     document.getElementById("filter-todos").addEventListener("change", displayFilteredEntries);
-    document.getElementById("topic-select").addEventListener("change", loadAllEntries);
 
+    // Load topics, entries, and recent entries when the window loads.
     window.addEventListener("load", () => {
       loadTopics();
+      updateEntries();
       loadRecentEntries();
-      loadAllEntries();
     });
 
+    // Add Entry Event Listener remains unchanged.
     document.getElementById("add-note-form").addEventListener("submit", async function(event) {
       event.preventDefault();
       const noteText = document.getElementById("note-text").value.trim();
@@ -389,24 +377,14 @@
         if (response.ok) {
           messageDiv.innerHTML = '<div class="message success">Entry added successfully!</div>';
           document.getElementById("note-text").value = "";
-          await loadRecentEntries();
-          await loadAllEntries();
+          updateEntries();
+          loadRecentEntries();
         } else {
           messageDiv.innerHTML = '<div class="message error">Error adding entry.</div>';
         }
       } catch (error) {
         messageDiv.innerHTML = '<div class="message error">Error adding entry.</div>';
       }
-    });
-
-    document.getElementById("search-form").addEventListener("submit", async function(event) {
-      event.preventDefault();
-      const query = document.getElementById("search-query").value.trim();
-      if (!query) {
-        document.getElementById("search-message").innerHTML = '<div class="message error">Please enter a search query.</div>';
-        return;
-      }
-      await loadSearchResults(query);
     });
   </script>
 </body>
