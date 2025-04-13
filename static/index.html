@@ -150,13 +150,13 @@
       const li = document.createElement("li");
       li.dataset.noteId = entry.id;
 
-      // The HTML includes the note metadata, text and an inline edit form.
+      // Include the note metadata, text, an inline edit form, and an edit button with a unique ID.
       li.innerHTML = `
         <strong>${new Date(entry.created_at).toLocaleString()}</strong>
         <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
         <br>
         <span id="note-text-${entry.id}">${entry.text}</span>
-        <button onclick="startEdit(${entry.id})" style="margin-left:10px;">Edit</button>
+        <button id="edit-button-${entry.id}" onclick="startEdit(${entry.id})" style="margin-left:10px;">Edit</button>
         <div id="edit-form-${entry.id}" style="display:none; margin-top:10px;">
           <textarea id="edit-text-${entry.id}" rows="4">${entry.text}</textarea>
           <br>
@@ -178,7 +178,6 @@
         const entries = await response.json();
         const recentList = document.getElementById("recent-list");
         recentList.innerHTML = "";
-
         entries.forEach(entry => {
           recentList.appendChild(renderNoteEntry(entry));
         });
@@ -195,12 +194,10 @@
           throw new Error("Failed to fetch all entries.");
         }
         const entries = await response.json();
-
         const allNotesList = document.getElementById("all-notes-list");
         const allTodosList = document.getElementById("all-todos-list");
         allNotesList.innerHTML = "";
         allTodosList.innerHTML = "";
-
         entries.forEach(entry => {
           const listItem = renderNoteEntry(entry);
           if (entry.note_type === "todo") {
@@ -235,7 +232,13 @@
     }
 
     // Edit related functions
+
     function startEdit(noteId) {
+      // Hide the edit button.
+      const editButton = document.getElementById(`edit-button-${noteId}`);
+      if (editButton) {
+        editButton.style.display = 'none';
+      }
       // Show the edit form and hide the note text span.
       document.getElementById(`edit-form-${noteId}`).style.display = 'block';
       document.getElementById(`note-text-${noteId}`).style.display = 'none';
@@ -246,6 +249,11 @@
       document.getElementById(`edit-form-${noteId}`).style.display = 'none';
       document.getElementById(`note-text-${noteId}`).style.display = 'inline';
       document.getElementById(`edit-message-${noteId}`).innerHTML = '';
+      // Show the edit button again.
+      const editButton = document.getElementById(`edit-button-${noteId}`);
+      if (editButton) {
+        editButton.style.display = 'inline';
+      }
     }
 
     async function saveEdit(noteId) {
@@ -265,7 +273,7 @@
           // Update the displayed note text.
           document.getElementById(`note-text-${noteId}`).innerText = newText;
           messageDiv.innerHTML = '<div class="message success">Updated successfully!</div>';
-          // Hide the edit form after a short delay.
+          // Hide the edit form and show the edit button after a short delay.
           setTimeout(() => {
             cancelEdit(noteId);
           }, 1000);
@@ -301,11 +309,10 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: noteText })
         });
-
         if (response.ok) {
           messageDiv.innerHTML = '<div class="message success">Entry added successfully!</div>';
           document.getElementById("note-text").value = "";
-          // Refresh the recent and all entries after adding a new one.
+          // Refresh the recent and all entries after adding a new entry.
           await loadRecentEntries();
           await loadAllEntries();
         } else {
