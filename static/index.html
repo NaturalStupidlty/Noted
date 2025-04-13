@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>LLM Note-Taking App</title>
+  <style>
+    /* Global Styles */
+    body {
+      margin: 0;
+      padding: 20px;
+      background-color: #f1f3f5;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #333;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    h1, h2, h3 {
+      color: #212529;
+    }
+
+    /* Section/Card Styles */
+    .section {
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    .section button {
+      background-color: #007bff;
+      border: none;
+      border-radius: 4px;
+      padding: 10px 15px;
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s ease;
+    }
+    .section button:hover {
+      background-color: #0056b3;
+    }
+
+    /* Form Elements */
+    textarea, input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ced4da;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    /* Lists and Items */
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+    li {
+      padding: 10px;
+      border-bottom: 1px solid #e9ecef;
+    }
+    li:last-child {
+      border-bottom: none;
+    }
+    .note-details {
+      font-size: 14px;
+      color: #6c757d;
+    }
+
+    /* Entry Category Headings */
+    .entry-category h3 {
+      margin-top: 0;
+      border-bottom: 2px solid #007bff;
+      display: inline-block;
+      padding-bottom: 5px;
+    }
+
+    /* Message Styles */
+    .message {
+      padding: 10px;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .message.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .message.error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 style="text-align: center; font-size: 3em">Noted</h1>
+
+    <!-- Add Entry Section -->
+    <div class="section" id="add-entry-section">
+      <h2>Add an Entry</h2>
+      <form id="add-note-form">
+        <textarea id="note-text" rows="4" placeholder="Enter your note or todo..."></textarea>
+        <button type="submit">Add Entry</button>
+      </form>
+      <div id="add-note-message"></div>
+    </div>
+
+    <!-- Recent Entries Section (Common list for both Notes and Todos) -->
+    <div class="section" id="recent-section">
+      <div class="entry-category">
+        <h3>Recent</h3>
+        <ul id="recent-list"></ul>
+      </div>
+    </div>
+
+    <!-- Search Section (Common list for search results) -->
+    <div class="section" id="search-section">
+      <h2>Search Entries</h2>
+      <form id="search-form">
+        <input type="text" id="search-query" placeholder="Enter search query..." />
+        <button type="submit">Search</button>
+      </form>
+      <div id="search-message"></div>
+      <div class="entry-category">
+        <h3 style="padding: 20px 0;">Search Results</h3>
+        <ul id="search-all-list"></ul>
+      </div>
+    </div>
+
+    <!-- All Entries Section (Separate lists for Notes and Todos) -->
+    <div class="section" id="all-entries-section">
+      <h2>All Entries</h2>
+      <div class="entry-category">
+        <h3>Notes</h3>
+        <ul id="all-notes-list"></ul>
+      </div>
+      <div class="entry-category">
+        <h3>Todos</h3>
+        <ul id="all-todos-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Function to load recent entries (common list)
+// Updated loadRecentEntries to bust cache
+async function loadRecentEntries() {
+  try {
+    const response = await fetch("/notes/recent?ts=" + Date.now(), { cache: "no-store" });
+    if (!response.ok) {
+      throw new Error("Failed to fetch recent entries.");
+    }
+    const entries = await response.json();
+    const recentList = document.getElementById("recent-list");
+    recentList.innerHTML = "";
+
+    entries.forEach(entry => {
+      const li = document.createElement("li");
+      li.innerHTML = `<strong>${new Date(entry.created_at).toLocaleString()}</strong>
+                      <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
+                      <br>${entry.text}`;
+      recentList.appendChild(li);
+    });
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+    // Similar update for loadAllEntries:
+    async function loadAllEntries() {
+      try {
+        const response = await fetch("/notes/all?ts=" + Date.now(), { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error("Failed to fetch all entries.");
+        }
+        const entries = await response.json();
+
+        const allNotesList = document.getElementById("all-notes-list");
+        const allTodosList = document.getElementById("all-todos-list");
+        allNotesList.innerHTML = "";
+        allTodosList.innerHTML = "";
+
+        entries.forEach(entry => {
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>${new Date(entry.created_at).toLocaleString()}</strong>
+                          <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
+                          <br>${entry.text}`;
+          if (entry.note_type === "todo") {
+            allTodosList.appendChild(li);
+          } else {
+            allNotesList.appendChild(li);
+          }
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+
+    // Load recent and all entries on page load.
+    window.addEventListener("load", () => {
+      loadRecentEntries();
+      loadAllEntries();
+    });
+
+    // Add new entry and trigger automatic refresh.
+    document.getElementById("add-note-form").addEventListener("submit", async function(event) {
+      event.preventDefault();
+      const noteText = document.getElementById("note-text").value.trim();
+      const messageDiv = document.getElementById("add-note-message");
+
+      if (!noteText) {
+        messageDiv.innerHTML = '<div class="message error">Please enter some text.</div>';
+        return;
+      }
+
+      try {
+        const response = await fetch("/notes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: noteText })
+        });
+
+        if (response.ok) {
+          messageDiv.innerHTML = '<div class="message success"">Entry added successfully!</div>';
+          document.getElementById("note-text").value = "";
+          // Refresh the recent and all entries after adding a new one.
+          await loadRecentEntries();
+          await loadAllEntries();
+        } else {
+          messageDiv.innerHTML = '<div class="message error">Error adding entry.</div>';
+        }
+      } catch (error) {
+        messageDiv.innerHTML = '<div class="message error">Error adding entry.</div>';
+      }
+    });
+
+    // Search for entries and display a common list for search results.
+    document.getElementById("search-form").addEventListener("submit", async function(event) {
+      event.preventDefault();
+      const query = document.getElementById("search-query").value.trim();
+      const searchMessage = document.getElementById("search-message");
+
+      if (!query) {
+        searchMessage.innerHTML = '<div class="message error">Please enter a search query.</div>';
+        return;
+      }
+
+      try {
+        const response = await fetch("/notes/search?query=" + encodeURIComponent(query));
+        if (!response.ok) {
+          throw new Error("Search failed.");
+        }
+        const entries = await response.json();
+        const searchAllList = document.getElementById("search-all-list");
+        searchAllList.innerHTML = "";
+
+        entries.forEach(entry => {
+          const li = document.createElement("li");
+          li.innerHTML = `<strong>${new Date(entry.created_at).toLocaleString()}</strong>
+                          <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
+                          <br>${entry.text}`;
+          searchAllList.appendChild(li);
+        });
+        searchMessage.innerHTML = "";
+      } catch (error) {
+        console.error(error);
+        searchMessage.innerHTML = '<div class="message error">Search failed.</div>';
+      }
+    });
+  </script>
+</body>
+</html>
