@@ -73,8 +73,6 @@
       font-weight: 500;
       cursor: pointer;
       transition: background-color 0.3s ease, transform 0.2s ease;
-      margin-left: auto;
-      display: flex;
     }
     button:hover {
       background-color: var(--primary-color-hover);
@@ -116,22 +114,28 @@
       font-size: 1rem;
       cursor: pointer;
     }
-
-    /* Hide edit buttons by default */
-    li button[id^="edit-button-"] {
+    /* New styles for note header and button group */
+    .note-header {
+      display: flex;
+      align-items: center;
+    }
+    .button-group {
+      margin-left: auto;
+      display: flex;
+      gap: 10px;
+    }
+    .button-group button {
+      flex: 1;
+    }
+    /* Hide action buttons by default */
+    li .button-group button {
       display: none;
-    }
-    /* Show edit button on hover over the list item */
-    li:hover button[id^="edit-button-"] {
-      display: inline-block;
-    }
-
-    /* Optional: Smooth fade-in effect for edit button */
-    li button[id^="edit-button-"] {
       opacity: 0;
       transition: opacity 0.1s ease;
     }
-    li:hover button[id^="edit-button-"] {
+    /* Show them on hover */
+    li:hover .button-group button {
+      display: inline-block;
       opacity: 1;
     }
   </style>
@@ -191,16 +195,22 @@
   </div>
 
   <script>
-    // Helper function to render a note entry with edit functionality.
+    // Helper function to render a note entry with edit and delete functionality.
     function renderNoteEntry(entry) {
       const li = document.createElement("li");
       li.dataset.noteId = entry.id;
       li.innerHTML = `
-        <strong>${new Date(entry.created_at).toLocaleString()}</strong>
-        <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
-        <br>
-        <span id="note-text-${entry.id}">${entry.text}</span>
-        <button id="edit-button-${entry.id}" onclick="startEdit(${entry.id})" style="margin-left:auto;display: flex">Edit</button>
+        <div class="note-header">
+          <div class="note-text-container">
+            <strong>${new Date(entry.created_at).toLocaleString()}</strong>
+            <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
+            <div id="note-text-${entry.id}">${entry.text}</div>
+          </div>
+          <div class="button-group">
+            <button id="edit-button-${entry.id}" onclick="startEdit(${entry.id})">Edit</button>
+            <button id="delete-button-${entry.id}" onclick="deleteNote(${entry.id})">Delete</button>
+          </div>
+        </div>
         <div id="edit-form-${entry.id}" style="display:none; margin-top:10px;">
           <textarea id="edit-text-${entry.id}" rows="4">${entry.text}</textarea>
           <br>
@@ -269,12 +279,12 @@
     }
 
     // Unified update function: if a search query exists, run search; otherwise, load all entries.
-    function updateEntries() {
+    async function updateEntries() {
       const query = document.getElementById("search-query").value.trim();
       if (query) {
-        loadSearchResultsUnified(query);
+        await loadSearchResultsUnified(query);
       } else {
-        loadAllEntriesUnified();
+        await loadAllEntriesUnified();
       }
     }
 
@@ -347,7 +357,7 @@
     async function saveEdit(noteId) {
       const newText = document.getElementById(`edit-text-${noteId}`).value.trim();
       if (!newText) {
-        // No message is displayed if the text is empty.
+        // Do nothing if the text is empty.
         return;
       }
       try {
@@ -358,7 +368,8 @@
         });
         if (response.ok) {
           document.getElementById(`note-text-${noteId}`).innerText = newText;
-          updateEntries();
+          await updateEntries();
+          // Hide the edit form after a short delay.
           setTimeout(() => {
             cancelEdit(noteId);
           }, 1000);
@@ -367,6 +378,28 @@
         }
       } catch (error) {
         console.error("Error updating note.", error);
+      }
+    }
+
+    // Delete note function.
+    async function deleteNote(noteId) {
+      try {
+        const response = await fetch(`/notes/${noteId}`, {
+          method: "DELETE"
+        });
+        if (response.ok) {
+          // Update the local state for all entries.
+          allEntriesData = allEntriesData.filter(entry => entry.id !== noteId);
+          // Re-render the main list (both notes and todos) using the updated local state.
+          displayFilteredEntries();
+
+          // Remove any instance of the note in the recent list:
+          document.querySelectorAll(`li[data-note-id="${noteId}"]`).forEach(el => el.remove());
+        } else {
+          console.error("Error deleting note from server.");
+        }
+      } catch (error) {
+        console.error("Error deleting note.", error);
       }
     }
 
@@ -400,7 +433,7 @@
         return;
       }
       try {
-        const response = await fetch("/notes", {
+        const response = await fetch("/notes/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: noteText })
@@ -413,10 +446,10 @@
             displayFilteredEntries();
           } else if (result.id) {
             // For creation or update actions.
-            updateEntries();
-            loadRecentEntries();
+            await updateEntries();
+            await loadRecentEntries();
           }
-          // Optionally clear the input if it’s not a search.
+          // Clear the input after adding a note.
           document.getElementById("note-text").value = "";
         } else {
           console.error("Error adding entry.");

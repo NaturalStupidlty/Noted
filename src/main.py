@@ -55,6 +55,22 @@ def get_topics():
 	return topics
 
 
+@app.post("/notes/create")
+def handle_note_agent(note: NoteCreate):
+	"""
+	New endpoint that uses the NoteAgent to determine if the input is a plain note or a command.
+	Depending on the action, it either creates, updates, or searches for a note.
+	"""
+	result = note_agent.handle_request(note.text)
+	status = result.get("status")
+	if status in ["created", "updated"]:
+		return NoteOut(**result["note"])
+	elif status == "search":
+		return result["results"]
+	else:
+		raise HTTPException(status_code=400, detail="Unrecognized action from NoteAgent")
+
+
 @app.put("/notes/{note_id}", response_model=NoteOut)
 def update_note(note_id: int, note: NoteCreate):
 	"""
@@ -87,6 +103,18 @@ def update_note(note_id: int, note: NoteCreate):
 	return NoteOut(**updated_doc)
 
 
+@app.delete("/notes/{note_id}")
+def delete_note(note_id: int):
+	"""
+	Delete a note by its ID.
+	"""
+	note = notes_db.get_note_by_id(note_id)
+	if not note:
+		raise HTTPException(status_code=404, detail="Note not found.")
+	notes_db.delete_note_document(note_id)
+	return {"message": "Note deleted successfully."}
+
+
 @app.get("/notes/recent", response_model=List[NoteOut])
 def get_recent_notes(n: int = Query(5, description="Number of recent notes to return")):
 	"""
@@ -115,19 +143,3 @@ def search_notes(query: str, n: int = Query(settings.DEFAULT_SEARCH_CANDIDATES,
 	if not filtered_notes:
 		logging.warning("No relevant notes found after agent filtering.")
 	return filtered_notes
-
-
-@app.post("/notes")
-def handle_note_agent(note: NoteCreate):
-	"""
-	New endpoint that uses the NoteAgent to determine if the input is a plain note or a command.
-	Depending on the action, it either creates, updates, or searches for a note.
-	"""
-	result = note_agent.handle_request(note.text)
-	status = result.get("status")
-	if status in ["created", "updated"]:
-		return NoteOut(**result["note"])
-	elif status == "search":
-		return result["results"]
-	else:
-		raise HTTPException(status_code=400, detail="Unrecognized action from NoteAgent")

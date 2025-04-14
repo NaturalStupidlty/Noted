@@ -89,6 +89,18 @@ class NotesDB:
             logging.exception("Failed to update note in Elasticsearch")
             raise HTTPException(status_code=500, detail=f"Elasticsearch update failed: {e}")
 
+    def delete_note_document(self, note_id: int):
+        """
+        Delete a note document by its ID.
+        """
+        try:
+            self.es.delete(index=self.index_name, id=note_id)
+        except NotFoundError:
+            raise HTTPException(status_code=404, detail="Note not found.")
+        except Exception as e:
+            logging.exception("Failed to delete note in Elasticsearch")
+            raise HTTPException(status_code=500, detail=f"Elasticsearch delete failed: {e}")
+
     def get_recent_notes(self, n: int) -> List[dict]:
         """
         Retrieve the most recent n notes.
