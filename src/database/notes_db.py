@@ -157,3 +157,14 @@ class NotesDB:
         except Exception as e:
             logging.exception("Elasticsearch search for notes failed")
             raise HTTPException(status_code=500, detail=f"Elasticsearch search failed: {e}")
+
+    def raw_search(self, query: dict) -> dict:
+        """
+        Execute an arbitrary search query using the underlying Elasticsearch client.
+        """
+        try:
+            response = self.es.search(index=self.index_name, body=query)
+            return response
+        except Exception as e:
+            logging.exception("Failed to execute raw search on the database")
+            raise HTTPException(status_code=500, detail=f"Database search failed: {e}")

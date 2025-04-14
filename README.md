@@ -2,6 +2,11 @@
 
 ## 0. Description
 
+The NoteAgent determines if it is just a note text or a request.
+If it is just a note, it is classified and is written into db. 
+If it is a request, the NoteAgent determines the type of request and takes an action: it can either be note creation,
+note editing, or note search. 
+
 ### AI powered search:
 - 1. [Elasticsearch](https://www.elastic.co/elasticsearch
 ) with Ada embeddings (high quality search but retrieves lots of likely relevant samples). 
