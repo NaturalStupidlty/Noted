@@ -4,7 +4,7 @@ from typing import Tuple
 
 class NotesClassificationModel:
     """
-    Agent responsible for classifying note content via the database abstraction.
+    Model responsible for classifying note content via the database abstraction.
     """
     def __init__(self, client, db):
         self.client = client

@@ -1,13 +1,13 @@
 import logging
 from typing import List
 from fastapi import HTTPException
-from src.schemas import NoteOut
+from src.database.schemas import NoteOut
 from src.config import settings
 
 
 class NotesSearchModel:
     """
-    Agent responsible for searching notes via the database abstraction.
+    Model responsible for searching notes via the database abstraction.
     """
     def __init__(self, client, db):
         self.client = client

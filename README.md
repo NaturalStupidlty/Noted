@@ -24,6 +24,9 @@ The topic for each notes is AI generated.
 The model is fed all unique topics that are present in the notes to be aware of context and
 have fewer duplicate topics.
 
+Future improvements: Automatically extract structured data from the notes and store it in a structured format.
+Use context of recent notes to improve the quality of results.
+
 ## 1. Installation
 
 - 1. Clone the repository

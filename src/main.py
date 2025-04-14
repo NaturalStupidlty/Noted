@@ -9,11 +9,11 @@ from elasticsearch import Elasticsearch
 from openai import OpenAI
 
 from src.config import settings
-from src.schemas import NoteCreate, NoteOut
+from src.database.schemas import NoteCreate, NoteOut
 from src.database.notes_db import NotesDB
 from src.agents.notes_agent import NoteAgent
-from src.agents.classification import NotesClassificationModel
-from src.agents.search import NotesSearchModel
+from src.models.classification import NotesClassificationModel
+from src.models.search import NotesSearchModel
 
 # --- Initialization ---
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
