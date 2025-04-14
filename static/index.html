@@ -2,81 +2,117 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Noted</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
   <style>
-    /* Global Styles */
+    :root {
+      --primary-color: #4A90E2;
+      --primary-color-hover: #357ABD;
+      --background-color: #F7F9FC;
+      --card-background: #FFFFFF;
+      --text-color: #333;
+      --muted-text: #777;
+      --border-color: #e0e0e0;
+    }
+    /* Base Styles */
+    * {
+      box-sizing: border-box;
+    }
     body {
       margin: 0;
       padding: 20px;
-      background-color: #f1f3f5;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      color: #333;
+      background-color: var(--background-color);
+      font-family: 'Roboto', sans-serif;
+      color: var(--text-color);
+      line-height: 1.6;
     }
     .container {
-      max-width: 800px;
+      max-width: 900px;
       margin: 0 auto;
+      padding: 0 15px;
     }
     h1, h2, h3 {
-      color: #212529;
-    }
-    /* Section/Card Styles */
-    .section {
-      background-color: #fff;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      padding: 20px;
+      font-weight: 500;
+      color: var(--text-color);
       margin-bottom: 20px;
     }
-    .section button {
-      background-color: #007bff;
-      border: none;
-      border-radius: 4px;
-      padding: 10px 15px;
-      color: #fff;
-      cursor: pointer;
-      transition: background 0.2s ease;
+    h1 {
+      text-align: center;
+      font-size: 3rem;
+      margin-bottom: 40px;
     }
-    .section button:hover {
-      background-color: #0056b3;
+    /* Card / Section Styles */
+    .section {
+      background: var(--card-background);
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.05);
+      padding: 30px;
+      margin-bottom: 30px;
     }
-    /* Form Elements */
+    /* Form & Input Styles */
     textarea, input[type="text"], select {
       width: 100%;
-      padding: 10px;
-      font-size: 16px;
-      border: 1px solid #ced4da;
-      border-radius: 4px;
-      margin-bottom: 10px;
+      padding: 12px;
+      font-size: 1rem;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 15px;
+      transition: border 0.3s ease;
     }
-    /* Lists and Items */
+    textarea:focus, input[type="text"]:focus, select:focus {
+      outline: none;
+      border-color: var(--primary-color);
+    }
+    button {
+      background-color: var(--primary-color);
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      color: #fff;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+    button:hover {
+      background-color: var(--primary-color-hover);
+      transform: translateY(-2px);
+    }
+    /* List Styles */
     ul {
-      list-style-type: none;
-      padding-left: 0;
+      list-style: none;
+      padding: 0;
+      margin: 0;
     }
     li {
-      padding: 10px;
-      border-bottom: 1px solid #e9ecef;
+      padding: 15px;
+      border-bottom: 1px solid var(--border-color);
+      transition: background-color 0.3s ease;
+    }
+    li:hover {
+      background-color: #f9f9f9;
     }
     li:last-child {
       border-bottom: none;
     }
     .note-details {
-      font-size: 14px;
-      color: #6c757d;
+      font-size: 0.9rem;
+      color: var(--muted-text);
     }
-    /* Entry Category Headings */
+    /* Item Category Headings */
     .entry-category h3 {
       margin-top: 0;
-      border-bottom: 2px solid #007bff;
+      border-bottom: 2px solid var(--primary-color);
       display: inline-block;
       padding-bottom: 5px;
+      margin-bottom: 15px;
     }
     /* Message Styles */
     .message {
-      padding: 10px;
-      border-radius: 4px;
-      margin-bottom: 10px;
-      font-size: 14px;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      font-size: 0.95rem;
     }
     .message.success {
       background-color: #d4edda;
@@ -86,46 +122,46 @@
       background-color: #f8d7da;
       color: #721c24;
     }
-    /* Checkbox Filters */
+    /* Filter Options */
     .filter-options label {
-      margin-right: 15px;
-      font-size: 16px;
+      margin-right: 20px;
+      font-size: 1rem;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
   <div class="container">
     <!-- Title -->
-    <h1 style="text-align: center; font-size: 3em">Noted</h1>
+    <h1>Noted</h1>
 
-    <!-- Add Entry Section -->
+    <!-- Add Item Section -->
     <div class="section" id="add-entry-section">
-      <h2>Add an Entry</h2>
       <form id="add-note-form">
-        <textarea id="note-text" rows="4" placeholder="Enter your note or todo..."></textarea>
-        <button type="submit">Add Entry</button>
+        <textarea id="note-text" rows="4" placeholder="What's on your mind?"></textarea>
+        <button type="submit">Add Item</button>
       </form>
       <div id="add-note-message"></div>
     </div>
 
-    <!-- Recent Entries Section -->
+    <!-- Recent Items Section -->
     <div class="section" id="recent-section">
-      <h2>Recent Entries</h2>
       <ul id="recent-list"></ul>
     </div>
 
     <!-- Unified Search & Filter Section -->
     <div class="section" id="search-filter-section">
-      <h2>Search</h2>
+
       <!-- Search Form -->
       <form id="search-form">
-        <input type="text" id="search-query" placeholder="Enter search query (or leave empty to filter all entries)..." />
+        <input type="text" id="search-query" placeholder="Search entries..." />
         <button type="submit">Search</button>
       </form>
       <div id="search-message"></div>
+
       <!-- Filter Options -->
       <div class="filter-options" style="margin-top: 20px;">
-        <label for="topic-select">Select Topic: </label>
+        <label for="topic-select">Select Topic:</label>
         <select id="topic-select">
           <option value="">All Topics</option>
         </select>
@@ -138,6 +174,7 @@
           <input type="checkbox" id="filter-todos" checked> Show Todos
         </label>
       </div>
+
       <!-- Results Display -->
       <div class="entry-category" id="notes-category">
         <h3>Notes</h3>
@@ -359,7 +396,7 @@
       loadRecentEntries();
     });
 
-    // Add Entry Event Listener remains unchanged.
+    // Add Item Event Listener.
     document.getElementById("add-note-form").addEventListener("submit", async function(event) {
       event.preventDefault();
       const noteText = document.getElementById("note-text").value.trim();
@@ -375,7 +412,7 @@
           body: JSON.stringify({ text: noteText })
         });
         if (response.ok) {
-          messageDiv.innerHTML = '<div class="message success">Entry added successfully!</div>';
+          messageDiv.innerHTML = '<div class="message success">Item added successfully!</div>';
           document.getElementById("note-text").value = "";
           updateEntries();
           loadRecentEntries();
