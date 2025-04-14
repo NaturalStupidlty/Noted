@@ -107,21 +107,6 @@
       padding-bottom: 5px;
       margin-bottom: 15px;
     }
-    /* Message Styles */
-    .message {
-      padding: 12px;
-      border-radius: 6px;
-      margin-bottom: 15px;
-      font-size: 0.95rem;
-    }
-    .message.success {
-      background-color: #d4edda;
-      color: #155724;
-    }
-    .message.error {
-      background-color: #f8d7da;
-      color: #721c24;
-    }
     /* Filter Options */
     .filter-options label {
       margin-right: 20px;
@@ -141,7 +126,6 @@
         <textarea id="note-text" rows="4" placeholder="What's on your mind?"></textarea>
         <button type="submit">Add Item</button>
       </form>
-      <div id="add-note-message"></div>
     </div>
 
     <!-- Recent Items Section -->
@@ -151,13 +135,11 @@
 
     <!-- Unified Search & Filter Section -->
     <div class="section" id="search-filter-section">
-
       <!-- Search Form -->
       <form id="search-form">
         <input type="text" id="search-query" placeholder="Search entries..." />
         <button type="submit">Search</button>
       </form>
-      <div id="search-message"></div>
 
       <!-- Filter Options -->
       <div class="filter-options" style="margin-top: 20px;">
@@ -203,7 +185,6 @@
           <br>
           <button onclick="saveEdit(${entry.id})">Save</button>
           <button onclick="cancelEdit(${entry.id})">Cancel</button>
-          <div id="edit-message-${entry.id}"></div>
         </div>
       `;
       return li;
@@ -261,10 +242,8 @@
         }
         allEntriesData = await response.json();
         displayFilteredEntries();
-        document.getElementById("search-message").innerHTML = "";
       } catch (error) {
         console.error(error);
-        document.getElementById("search-message").innerHTML = '<div class="message error">Search failed.</div>';
       }
     }
 
@@ -341,15 +320,13 @@
     function cancelEdit(noteId) {
       document.getElementById(`edit-form-${noteId}`).style.display = 'none';
       document.getElementById(`note-text-${noteId}`).style.display = 'inline';
-      document.getElementById(`edit-message-${noteId}`).innerHTML = '';
       document.getElementById(`edit-button-${noteId}`).style.display = 'inline';
     }
 
     async function saveEdit(noteId) {
       const newText = document.getElementById(`edit-text-${noteId}`).value.trim();
-      const messageDiv = document.getElementById(`edit-message-${noteId}`);
       if (!newText) {
-        messageDiv.innerHTML = '<div class="message error">Please enter some text.</div>';
+        // No message is displayed if the text is empty.
         return;
       }
       try {
@@ -360,17 +337,15 @@
         });
         if (response.ok) {
           document.getElementById(`note-text-${noteId}`).innerText = newText;
-          messageDiv.innerHTML = '<div class="message success">Updated successfully!</div>';
           updateEntries();
           setTimeout(() => {
             cancelEdit(noteId);
           }, 1000);
         } else {
-          messageDiv.innerHTML = '<div class="message error">Error updating note.</div>';
+          console.error("Error updating note.");
         }
       } catch (error) {
-        console.error(error);
-        messageDiv.innerHTML = '<div class="message error">Error updating note.</div>';
+        console.error("Error updating note.", error);
       }
     }
 
@@ -400,9 +375,8 @@
     document.getElementById("add-note-form").addEventListener("submit", async function(event) {
       event.preventDefault();
       const noteText = document.getElementById("note-text").value.trim();
-      const messageDiv = document.getElementById("add-note-message");
       if (!noteText) {
-        messageDiv.innerHTML = '<div class="message error">Please enter some text.</div>';
+        // Simply return if no text is provided.
         return;
       }
       try {
@@ -412,15 +386,14 @@
           body: JSON.stringify({ text: noteText })
         });
         if (response.ok) {
-          messageDiv.innerHTML = '<div class="message success">Item added successfully!</div>';
           document.getElementById("note-text").value = "";
           updateEntries();
           loadRecentEntries();
         } else {
-          messageDiv.innerHTML = '<div class="message error">Error adding entry.</div>';
+          console.error("Error adding entry.");
         }
       } catch (error) {
-        messageDiv.innerHTML = '<div class="message error">Error adding entry.</div>';
+        console.error("Error adding entry.", error);
       }
     });
   </script>
