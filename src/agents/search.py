@@ -5,7 +5,7 @@ from src.schemas import NoteOut
 from src.config import settings
 
 
-class SearchAgent:
+class NotesSearchModel:
     """
     Agent responsible for searching notes via the database abstraction.
     """

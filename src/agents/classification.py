@@ -2,7 +2,7 @@ import logging
 from typing import Tuple
 
 
-class ClassificationAgent:
+class NotesClassificationModel:
     """
     Agent responsible for classifying note content via the database abstraction.
     """

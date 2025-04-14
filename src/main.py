@@ -12,8 +12,8 @@ from openai import OpenAI
 from src.config import settings
 from src.schemas import NoteCreate, NoteOut
 from src.database.notes_db import NotesDB
-from src.agents.classification_agents import ClassificationAgent
-from src.agents.search_agents import SearchAgent
+from src.agents.classification import NotesClassificationModel
+from src.agents.search import NotesSearchModel
 
 
 # --- Initialization ---
@@ -26,8 +26,8 @@ es = Elasticsearch(ES_HOST)
 notes_db = NotesDB(es=es, index_name=INDEX_NAME, embeddings_dimension=EMBEDDINGS_DIMENSION)
 
 # Instantiate agents.
-classification_agent = ClassificationAgent(client=client, db=notes_db)
-search_agent = SearchAgent(client=client, db=notes_db)
+classification_agent = NotesClassificationModel(client=client, db=notes_db)
+search_agent = NotesSearchModel(client=client, db=notes_db)
 
 # --- FastAPI Application Setup ---
 app = FastAPI(title="Noted")
