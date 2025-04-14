@@ -73,10 +73,12 @@
       font-weight: 500;
       cursor: pointer;
       transition: background-color 0.3s ease, transform 0.2s ease;
+      margin-left: auto;
+      display: flex;
     }
     button:hover {
       background-color: var(--primary-color-hover);
-      transform: translateY(-2px);
+      transform: translateY(-1px);
     }
     /* List Styles */
     ul {
@@ -88,6 +90,7 @@
       padding: 15px;
       border-bottom: 1px solid var(--border-color);
       transition: background-color 0.3s ease;
+      position: relative;
     }
     li:hover {
       background-color: #f9f9f9;
@@ -112,6 +115,24 @@
       margin-right: 20px;
       font-size: 1rem;
       cursor: pointer;
+    }
+
+    /* Hide edit buttons by default */
+    li button[id^="edit-button-"] {
+      display: none;
+    }
+    /* Show edit button on hover over the list item */
+    li:hover button[id^="edit-button-"] {
+      display: inline-block;
+    }
+
+    /* Optional: Smooth fade-in effect for edit button */
+    li button[id^="edit-button-"] {
+      opacity: 0;
+      transition: opacity 0.1s ease;
+    }
+    li:hover button[id^="edit-button-"] {
+      opacity: 1;
     }
   </style>
 </head>
@@ -179,7 +200,7 @@
         <span class="note-details"> — ${entry.note_type} | ${entry.topic}</span>
         <br>
         <span id="note-text-${entry.id}">${entry.text}</span>
-        <button id="edit-button-${entry.id}" onclick="startEdit(${entry.id})" style="margin-left:10px;">Edit</button>
+        <button id="edit-button-${entry.id}" onclick="startEdit(${entry.id})" style="margin-left:auto;display: flex">Edit</button>
         <div id="edit-form-${entry.id}" style="display:none; margin-top:10px;">
           <textarea id="edit-text-${entry.id}" rows="4">${entry.text}</textarea>
           <br>
@@ -404,7 +425,6 @@
         console.error("Error adding entry.", error);
       }
     });
-
   </script>
 </body>
 </html>
