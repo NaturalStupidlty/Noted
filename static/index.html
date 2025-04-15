@@ -448,6 +448,12 @@
             // For creation or update actions.
             await updateEntries();
             await loadRecentEntries();
+            displayFilteredEntries();
+          } else if (result.message && result.message.includes("deleted")) {
+            // Call functions to update the frontend
+            await updateEntries();
+            await loadRecentEntries();
+            displayFilteredEntries();
           }
           // Clear the input after adding a note.
           document.getElementById("note-text").value = "";

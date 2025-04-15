@@ -58,16 +58,38 @@ def get_topics():
 @app.post("/notes/create")
 def handle_note_agent(note: NoteCreate):
 	"""
-	New endpoint that uses the NoteAgent to determine if the input is a plain note or a command.
-	Depending on the action, it either creates, updates, or searches for a note.
+	Processes the note request using the NoteAgent and returns a proper response
+	depending on the action detected. Handles all corner cases, including if no matching
+	note is found for search, update, or delete operations.
 	"""
 	result = note_agent.handle_request(note.text)
 	status = result.get("status")
+
 	if status in ["created", "updated"]:
+		# When a new note is created or an existing note is updated,
+		# return the note data.
 		return NoteOut(**result["note"])
+
+	elif status == "deleted":
+		# When a note is deleted, ensure there is an actual note reference.
+		if not result.get("note"):
+			raise HTTPException(status_code=404, detail="Note not found for deletion.")
+		es.indices.refresh(index=INDEX_NAME)
+		return NoteOut(**result["note"])
+
+	elif status == "not_found":
+		# For update or delete operations where the note could not be located.
+		raise HTTPException(status_code=404, detail="Note not found for update or deletion.")
+
 	elif status == "search":
-		return result["results"]
+		# For search operations, validate that some notes were found.
+		search_results = result.get("results", [])
+		if not search_results:
+			raise HTTPException(status_code=404, detail="No notes found for the search query.")
+		return search_results
+
 	else:
+		# If the action is unrecognized, return a 400 Bad Request error.
 		raise HTTPException(status_code=400, detail="Unrecognized action from NoteAgent")
 
 

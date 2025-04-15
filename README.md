@@ -15,7 +15,7 @@ This step may be skipped if there are few records.
 
 
 ### Classification:
-The entries are classified using AI into 2 categories for now:
+The items are classified using AI into 2 categories for now:
 - 1. Notes
 - 2. TODOs
 
