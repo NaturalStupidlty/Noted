@@ -234,6 +234,78 @@
   </div>
 
   <script>
+  // Variables to track recording state and the WebSocket.
+  let isRecording = false;
+  let mediaRecorder;
+  let wsSocket;
+
+  // Create a new button for voice input streaming.
+  const wsRecordButton = document.createElement("button");
+  wsRecordButton.innerText = "Start Voice Input";
+  wsRecordButton.style.marginTop = "10px";
+
+  wsRecordButton.addEventListener("click", async () => {
+      if (!isRecording) {
+          // Open a WebSocket connection to the voice transcription endpoint.
+          wsSocket = new WebSocket(`ws://${window.location.host}/ws/voice`);
+          wsSocket.onopen = () => {
+              console.log("WebSocket connection established for voice transcription.");
+          };
+
+          wsSocket.onmessage = (event) => {
+              const data = JSON.parse(event.data);
+              // Live update the note textarea with incoming transcription tokens.
+              if (data.transcript) {
+                  document.getElementById("note-text").value += data.transcript;
+              }
+              // When final note creation is complete, update the UI accordingly.
+              if (data.final) {
+                  displayNotification("Voice note created successfully.");
+                  updateEntries();
+                  loadRecentEntries();
+              }
+              if (data.error) {
+                  displayNotification(data.error);
+              }
+          };
+
+          wsSocket.onerror = (err) => {
+              console.error("WebSocket error:", err);
+          };
+
+          // Begin recording audio via the MediaRecorder API.
+          try {
+              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+              mediaRecorder = new MediaRecorder(stream);
+              // Specify a short timeslice so that audio chunks are sent frequently (e.g., every 250ms).
+              mediaRecorder.start(250);
+              isRecording = true;
+              wsRecordButton.innerText = "Stop Voice Input";
+              // On data available, send audio chunks to the server through the WebSocket.
+              mediaRecorder.ondataavailable = function(event) {
+                  if (wsSocket && wsSocket.readyState === WebSocket.OPEN) {
+                      wsSocket.send(event.data);
+                  }
+              };
+          } catch (error) {
+              displayNotification("Could not access microphone. Please allow microphone permissions.");
+              console.error("Microphone access error:", error);
+          }
+      } else {
+          // When stopping, stop the media recorder and close the WebSocket.
+          mediaRecorder.stop();
+          isRecording = false;
+          wsRecordButton.innerText = "Start Voice Input";
+          wsSocket.close();
+      }
+  });
+
+  // Append the voice input button to the add-entry section.
+  document.getElementById("add-entry-section").appendChild(wsRecordButton);
+</script>
+
+
+  <script>
     // Helper function to render a note entry with edit and delete functionality.
     function renderNoteEntry(entry) {
       const li = document.createElement("li");
