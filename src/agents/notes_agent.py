@@ -175,6 +175,10 @@ class NoteAgent:
             HTTPException: If the note is not found.
         """
         note_id = self._locate_note_id(note_text, note_id, search_query)
+        if note_id is None:
+            logging.warning("Note to delete not found.")
+            return {"status": "not_found", "note": None}
+
         note_to_delete = self.db.get_note_by_id(note_id)
 
         if not note_to_delete:

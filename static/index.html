@@ -42,6 +42,16 @@
       font-size: 3rem;
       margin-bottom: 40px;
     }
+    /* Notification Styles */
+    .notification {
+      background-color: #f8d7da;
+      color: #721c24;
+      padding: 10px;
+      margin-bottom: 15px;
+      border: 1px solid #f5c6cb;
+      border-radius: 6px;
+      text-align: center;
+    }
     /* Card / Section Styles */
     .section {
       background: var(--card-background);
@@ -142,6 +152,9 @@
 </head>
 <body>
   <div class="container">
+    <!-- Notification area -->
+    <div id="notification" class="notification" style="display:none;"></div>
+
     <!-- Title -->
     <h1>Noted</h1>
 
@@ -223,6 +236,18 @@
 
     // Global variable to store the currently loaded entries.
     let allEntriesData = [];
+
+    // Helper function to display notifications to the user.
+    function displayNotification(message) {
+      const notificationDiv = document.getElementById("notification");
+      notificationDiv.textContent = message;
+      notificationDiv.style.display = "block";
+
+      // Hide the notification after 5 seconds.
+      setTimeout(() => {
+        notificationDiv.style.display = "none";
+      }, 5000);
+    }
 
     // Load topics for the dropdown.
     async function loadTopics() {
@@ -357,7 +382,6 @@
     async function saveEdit(noteId) {
       const newText = document.getElementById(`edit-text-${noteId}`).value.trim();
       if (!newText) {
-        // Do nothing if the text is empty.
         return;
       }
       try {
@@ -366,17 +390,19 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: newText })
         });
-        if (response.ok) {
-          document.getElementById(`note-text-${noteId}`).innerText = newText;
-          await updateEntries();
-          // Hide the edit form after a short delay.
-          setTimeout(() => {
-            cancelEdit(noteId);
-          }, 1000);
-        } else {
-          console.error("Error updating note.");
+        if (!response.ok) {
+          const errorData = await response.json();
+          displayNotification(errorData.detail || "Error updating note.");
+          return;
         }
+        // If updated successfully, update the display.
+        document.getElementById(`note-text-${noteId}`).innerText = newText;
+        await updateEntries();
+        setTimeout(() => {
+          cancelEdit(noteId);
+        }, 1000);
       } catch (error) {
+        displayNotification("Network error: Could not update note.");
         console.error("Error updating note.", error);
       }
     }
@@ -387,18 +413,18 @@
         const response = await fetch(`/notes/${noteId}`, {
           method: "DELETE"
         });
-        if (response.ok) {
-          // Update the local state for all entries.
-          allEntriesData = allEntriesData.filter(entry => entry.id !== noteId);
-          // Re-render the main list (both notes and todos) using the updated local state.
-          displayFilteredEntries();
-
-          // Remove any instance of the note in the recent list:
-          document.querySelectorAll(`li[data-note-id="${noteId}"]`).forEach(el => el.remove());
-        } else {
-          console.error("Error deleting note from server.");
+        if (!response.ok) {
+          const errorData = await response.json();
+          displayNotification(errorData.detail || "Error deleting note from server.");
+          return;
         }
+        // Update the local state for all entries.
+        allEntriesData = allEntriesData.filter(entry => entry.id !== noteId);
+        displayFilteredEntries();
+        // Remove any instance of the note in the recent list.
+        document.querySelectorAll(`li[data-note-id="${noteId}"]`).forEach(el => el.remove());
       } catch (error) {
+        displayNotification("Network error: Could not delete note.");
         console.error("Error deleting note.", error);
       }
     }
@@ -450,7 +476,7 @@
             await loadRecentEntries();
             displayFilteredEntries();
           } else if (result.message && result.message.includes("deleted")) {
-            // Call functions to update the frontend
+            // Update the frontend when deletion occurs.
             await updateEntries();
             await loadRecentEntries();
             displayFilteredEntries();
@@ -458,9 +484,12 @@
           // Clear the input after adding a note.
           document.getElementById("note-text").value = "";
         } else {
+          const errorData = await response.json();
+          displayNotification(errorData.detail || "Error adding entry.");
           console.error("Error adding entry.");
         }
       } catch (error) {
+        displayNotification("Network error: Could not add entry.");
         console.error("Error adding entry.", error);
       }
     });
