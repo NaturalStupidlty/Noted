@@ -75,6 +75,7 @@
       border-color: var(--primary-color);
     }
     button {
+      width: 100%;
       background-color: var(--primary-color);
       border: none;
       border-radius: 6px;
@@ -88,6 +89,29 @@
       background-color: var(--primary-color-hover);
       transform: translateY(-1px);
     }
+    .button-container {
+      text-align: right;
+    }
+
+    /* New arrow button styles */
+    .arrow-button {
+      background-color: var(--primary-color);
+      border: none;
+      border-radius: 6px;
+      padding: 10px 20px;
+      color: #fff;
+      font-size: 1.5rem; /* Increase size for better visibility if needed */
+      font-weight: 5000;
+      cursor: pointer;
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+
+    /* Hover effects for the arrow button */
+    .arrow-button:hover {
+      background-color: var(--primary-color-hover);
+      transform: translateY(-1px);
+    }
+
     /* List Styles */
     ul {
       list-style: none;
@@ -162,7 +186,9 @@
     <div class="section" id="add-entry-section">
       <form id="add-note-form">
         <textarea id="note-text" rows="4" placeholder="What's on your mind?"></textarea>
-        <button type="submit">Add Item</button>
+        <div class="button-container">
+          <button type="submit" class="arrow-button">&#8593;</button>
+        </div>
       </form>
     </div>
 
