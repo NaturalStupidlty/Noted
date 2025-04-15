@@ -68,6 +68,7 @@ def handle_note_agent(note: NoteCreate):
 	if status in ["created", "updated"]:
 		# When a new note is created or an existing note is updated,
 		# return the note data.
+		es.indices.refresh(index=INDEX_NAME)
 		return NoteOut(**result["note"])
 
 	elif status == "deleted":
