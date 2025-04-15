@@ -3,6 +3,7 @@ import logging
 from datetime import datetime
 from fastapi import HTTPException
 
+from src.models.embeddings import generate_embedding
 from src.database.schemas import NoteOut
 from src.config import settings
 
@@ -82,19 +83,10 @@ class NoteAgent:
             raise HTTPException(status_code=500, detail=f"Embedding generation failed: {e}")
 
     def _create_note(self, note_text: str) -> dict:
-        """
-        Creates a new note in the database.
-
-        Args:
-            note_text (str): The text of the note.
-
-        Returns:
-            dict: A dictionary with status "created" and the created note document.
-        """
         note_type, topic = self.classification_agent.classify(note_text)
         created_at = datetime.utcnow().isoformat()
         new_id = self.db.count_notes() + 1
-        embedding_vector = self._get_embedding(note_text)
+        embedding_vector = generate_embedding(self.client, note_text)
 
         doc = {
             "id": new_id,
@@ -108,25 +100,12 @@ class NoteAgent:
         return {"status": "created", "note": doc}
 
     def _update_note(self, note_text: str, note_id: any) -> dict:
-        """
-        Updates an existing note with new text, classification, and embedding.
-
-        Args:
-            note_text (str): The updated note text.
-            note_id (any): The ID of the note to update.
-
-        Returns:
-            dict: A dictionary with status "updated" and the updated note document.
-
-        Raises:
-            HTTPException: If the note is not found.
-        """
         existing_note = self.db.get_note_by_id(note_id)
         if not existing_note:
             raise HTTPException(status_code=404, detail="Note not found.")
 
         note_type, topic = self.classification_agent.classify(note_text)
-        embedding_vector = self._get_embedding(note_text)
+        embedding_vector = generate_embedding(self.client, note_text)
         update_fields = {
             "text": note_text,
             "note_type": note_type,

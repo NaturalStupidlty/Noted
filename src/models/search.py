@@ -1,6 +1,8 @@
 import logging
 from typing import List
 from fastapi import HTTPException
+
+from src.models.embeddings import generate_embedding
 from src.database.schemas import NoteOut
 from src.config import settings
 
@@ -14,21 +16,15 @@ class NotesSearchModel:
         self.db = db
 
     def search_notes(self, query: str, n: int) -> List[NoteOut]:
-        # Count documents using the database interface.
         try:
             doc_count = self.db.count_notes()
         except Exception as e:
             logging.exception("SearchAgent failed to count documents in the database")
             raise HTTPException(status_code=500, detail=f"Database count request failed: {e}")
 
-        # Use vector search only if enough samples exist.
         if doc_count > settings.MIN_SAMPLES_TO_USE_EMBEDDINGS_SEARCH:
             try:
-                query_embedding_response = self.client.embeddings.create(
-                    input=query,
-                    model="text-embedding-ada-002"
-                )
-                query_vector = query_embedding_response.data[0].embedding
+                query_vector = generate_embedding(self.client, query)
             except Exception as e:
                 logging.exception("SearchAgent embedding generation failed")
                 raise HTTPException(status_code=500, detail=f"Embedding generation failed: {e}")
@@ -45,6 +41,7 @@ class NotesSearchModel:
                     }
                 }
             }
+
             try:
                 es_response = self.db.raw_search(search_query)
             except Exception as e:
