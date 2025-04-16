@@ -26,9 +26,6 @@ The topic for each notes is AI generated.
 The model is fed all unique topics that are present in the notes to be aware of context and
 have fewer duplicate topics.
 
-Future improvements: Automatically extract structured data from the notes and store it in a structured format.
-Use context of recent notes to improve the quality of results.
-
 ## Filtering:
 
 You can filter notes by:
@@ -51,6 +48,10 @@ Support for multiple languages, lot's of model versions,
 and streaming for real time transcription.
 
 After the transcription is done, the text is postprocessed using AI to get more accurate results.
+
+_____
+Future improvements: Automatically extract structured data from the notes and store it in a structured format.
+Use context of recent notes to improve the quality of results. Added configurable support for more languages.
 
 ## 1. Installation
 

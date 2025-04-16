@@ -215,7 +215,7 @@
     <div id="notification" class="notification" style="display:none;"></div>
 
     <!-- Title -->
-    <h1>Noted</h1>
+    <h1>📝 Noted</h1>
 
     <!-- Add Item Section -->
     <div class="section" id="add-entry-section">
@@ -239,7 +239,7 @@
     <div class="section" id="search-filter-section">
       <!-- Search Form -->
       <form id="search-form">
-        <input type="text" id="search-query" placeholder="Search entries..." />
+        <input type="text" id="search-query" placeholder="Search..." />
         <button type="submit">🔍</button>
       </form>
 
@@ -525,52 +525,53 @@
       loadRecentEntries();
     });
 
-    // Add Item Event Listener.
+    // Add Item Event Listener
     document.getElementById("add-note-form").addEventListener("submit", async function(event) {
       event.preventDefault();
+
       const noteText = document.getElementById("note-text").value.trim();
-      if (!noteText) {
-        return;
-      }
+      if (!noteText) return;
+
       try {
         const response = await fetch("/notes/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: noteText })
         });
-        if (response.ok) {
-          const newEntry = await response.json();
-
-          // Optionally update the "all entries" and "filtered entries" lists.
-          await updateEntries();
-
-          // Immediately update the recent list UI.
-          const recentSection = document.getElementById("recent-section");
-          const recentList = document.getElementById("recent-list");
-
-          // Ensure the section is visible in case it was hidden.
-          recentSection.style.display = "block";
-
-          // Render and prepend the new note.
-          const newNoteElement = renderNoteEntry(newEntry);
-          recentList.insertBefore(newNoteElement, recentList.firstChild);
-
-          // Clear the input field.
-          document.getElementById("note-text").value = "";
-
-          // Optionally refresh recent entries from server to stay in sync:
-          await loadRecentEntries();
-
-        } else {
+        if (!response.ok) {
           const errorData = await response.json();
           displayNotification(errorData.detail || "Error adding entry.");
-          console.error("Error adding entry.");
+          return;
         }
+
+        const payload = await response.json();
+
+        if (Array.isArray(payload)) {
+          // ——— search results returned ———
+          allEntriesData = payload;
+          displayFilteredEntries();
+
+        } else {
+          // ——— single new/updated note ———
+          const newEntry = payload;
+          // update unified view (will show this new note among all)
+          await updateEntries();
+
+          // prepend to “Recent”
+          const recentList = document.getElementById("recent-list");
+          recentList.insertBefore(renderNoteEntry(newEntry), recentList.firstChild);
+        }
+
+        // clear the input and refresh “Recent” panel
+        document.getElementById("note-text").value = "";
+        await loadRecentEntries();
+
       } catch (error) {
         displayNotification("Network error: Could not add entry.");
         console.error("Error adding entry.", error);
       }
     });
+
 
   </script>
   <script>

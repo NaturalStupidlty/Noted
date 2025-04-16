@@ -116,18 +116,17 @@ def handle_note_agent(note: NoteCreate):
 	"""
 	result = note_agent.handle_request(note.text)
 	status = result.get("status")
+	es.indices.refresh(index=INDEX_NAME)
 
 	if status in ["created", "updated"]:
 		# When a new note is created or an existing note is updated,
 		# return the note data.
-		es.indices.refresh(index=INDEX_NAME)
 		return NoteOut(**result["note"])
 
 	elif status == "deleted":
 		# When a note is deleted, ensure there is an actual note reference.
 		if not result.get("note"):
 			raise HTTPException(status_code=404, detail="Note not found for deletion.")
-		es.indices.refresh(index=INDEX_NAME)
 		return NoteOut(**result["note"])
 
 	elif status == "not_found":
