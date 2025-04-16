@@ -1,9 +1,8 @@
-import asyncio
 import logging
 import os
 from typing import List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from elasticsearch import Elasticsearch
@@ -15,6 +14,7 @@ from src.database.notes_db import NotesDB
 from src.agents.notes_agent import NoteAgent
 from src.models.classification import NotesClassificationModel
 from src.models.search import NotesSearchModel
+from src.voice_asr import router as voice_asr_router
 
 # --- Initialization ---
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -40,6 +40,7 @@ note_agent = NoteAgent(
 # --- FastAPI Application Setup ---
 app = FastAPI(title="Noted")
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.include_router(voice_asr_router)
 
 
 @app.get("/", response_class=FileResponse)
@@ -93,67 +94,6 @@ def handle_note_agent(note: NoteCreate):
 	else:
 		# If the action is unrecognized, return a 400 Bad Request error.
 		raise HTTPException(status_code=400, detail="Unrecognized action from NoteAgent")
-
-
-@app.websocket("/ws/voice")
-async def voice_transcription_ws(websocket: WebSocket):
-	await websocket.accept()
-	try:
-		# Create a realtime session with OpenAI for streaming transcription.
-		# Adjust parameters (e.g., language, model) as needed.
-		session = client.realtime_sessions.create(model="whisper-1", language="en")
-	except Exception as e:
-		logging.exception("Failed to create realtime session")
-		await websocket.close(code=1011)
-		return
-
-	async def audio_consumer():
-		"""Continuously receive audio chunks from the WebSocket and stream them to OpenAI."""
-		try:
-			while True:
-				# Receive binary audio data from client
-				data = await websocket.receive_bytes()
-				# Forward the audio chunk to the realtime session
-				# (Assumes send_audio is async; adjust if necessary.)
-				await session.send_audio(data)
-		except WebSocketDisconnect:
-			logging.info("WebSocket disconnected from audio consumer.")
-		except Exception as e:
-			logging.exception("Error receiving audio data.")
-
-	# Create a task to continuously consume audio.
-	audio_task = asyncio.create_task(audio_consumer())
-
-	try:
-		# Stream transcription output from OpenAI as it arrives.
-		async for token in session.stream():
-			# Expect each token chunk to have a "text" field (adjust based on actual API response).
-			if "text" in token:
-				await websocket.send_json({"transcript": token["text"]})
-	except Exception as e:
-		logging.exception("Error during transcription streaming")
-		await websocket.send_json({"error": "Error during transcription streaming"})
-	finally:
-		# Ensure we cancel the audio consumer if the session ends.
-		audio_task.cancel()
-		# Finalize the session to get the complete transcript.
-		try:
-			final_transcript = await session.finish()  # Assume finish is async and returns the final text
-		except Exception as e:
-			logging.exception("Error finishing realtime session")
-			final_transcript = ""
-		if not final_transcript:
-			final_transcript = ""  # Fallback if transcript is empty
-		# Use the complete transcript in your note creation process.
-		note = NoteCreate(text=final_transcript)
-		result = note_agent.handle_request(note.text)
-		if result.get("status") in ["created", "updated"]:
-			es.indices.refresh(index=INDEX_NAME)
-			# Send final note details to the client.
-			await websocket.send_json({"final": result["note"]})
-		else:
-			await websocket.send_json({"error": "Note creation failed."})
-		await websocket.close()
 
 
 @app.put("/notes/{note_id}", response_model=NoteOut)

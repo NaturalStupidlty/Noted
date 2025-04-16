@@ -47,10 +47,6 @@ newgrp docker
 ## 2. Running
 
 ```bash
-uvicorn src.main:app --reload
-```
-
-```bash
 # Disabling security must NOT be done in production, this is only for local development
 sudo docker run -p 9200:9200 \
     -e "discovery.type=single-node" \
@@ -58,4 +54,9 @@ sudo docker run -p 9200:9200 \
     -e "xpack.security.http.ssl.enabled=false" \
     docker.elastic.co/elasticsearch/elasticsearch:8.6.0
 ```
+
+```bash
+uvicorn src.main:app --host 0.0.0.0 --port 8000 --ws websockets --reload
+```
+
 App running on http://127.0.0.1:8000 (Press CTRL+C to quit)

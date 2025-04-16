@@ -1,0 +1,12 @@
+pydantic
+pydantic-settings
+fastapi
+uvicorn
+uvicorn[standard]
+sqlalchemy
+openai
+elasticsearch==8.6.0
+
+librosa
+soundfile
+torchaudio

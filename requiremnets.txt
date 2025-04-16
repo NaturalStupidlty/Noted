@@ -1,7 +1,0 @@
-pydantic
-pydantic-settings
-fastapi
-uvicorn
-sqlalchemy
-openai
-elasticsearch

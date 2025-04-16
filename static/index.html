@@ -172,6 +172,16 @@
       display: inline-block;
       opacity: 1;
     }
+    #voice-buttons {
+      margin-top: 10px;
+      text-align: right;
+    }
+    #start-voice-button, #stop-voice-button {
+      padding: 8px 12px;
+      font-size: 1rem;
+      margin-left: 5px;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -186,6 +196,11 @@
     <div class="section" id="add-entry-section">
       <form id="add-note-form">
         <textarea id="note-text" rows="4" placeholder="What's on your mind?"></textarea>
+        <!-- Voice input buttons -->
+        <div id="voice-buttons">
+          <button type="button" id="start-voice-button">🎤 Start Voice</button>
+          <button type="button" id="stop-voice-button" style="display:none;">Stop Voice</button>
+        </div>
         <div class="button-container">
           <button type="submit" class="arrow-button">&#8593;</button>
         </div>
@@ -232,78 +247,6 @@
       </div>
     </div>
   </div>
-
-  <script>
-  // Variables to track recording state and the WebSocket.
-  let isRecording = false;
-  let mediaRecorder;
-  let wsSocket;
-
-  // Create a new button for voice input streaming.
-  const wsRecordButton = document.createElement("button");
-  wsRecordButton.innerText = "Start Voice Input";
-  wsRecordButton.style.marginTop = "10px";
-
-  wsRecordButton.addEventListener("click", async () => {
-      if (!isRecording) {
-          // Open a WebSocket connection to the voice transcription endpoint.
-          wsSocket = new WebSocket(`ws://${window.location.host}/ws/voice`);
-          wsSocket.onopen = () => {
-              console.log("WebSocket connection established for voice transcription.");
-          };
-
-          wsSocket.onmessage = (event) => {
-              const data = JSON.parse(event.data);
-              // Live update the note textarea with incoming transcription tokens.
-              if (data.transcript) {
-                  document.getElementById("note-text").value += data.transcript;
-              }
-              // When final note creation is complete, update the UI accordingly.
-              if (data.final) {
-                  displayNotification("Voice note created successfully.");
-                  updateEntries();
-                  loadRecentEntries();
-              }
-              if (data.error) {
-                  displayNotification(data.error);
-              }
-          };
-
-          wsSocket.onerror = (err) => {
-              console.error("WebSocket error:", err);
-          };
-
-          // Begin recording audio via the MediaRecorder API.
-          try {
-              const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-              mediaRecorder = new MediaRecorder(stream);
-              // Specify a short timeslice so that audio chunks are sent frequently (e.g., every 250ms).
-              mediaRecorder.start(250);
-              isRecording = true;
-              wsRecordButton.innerText = "Stop Voice Input";
-              // On data available, send audio chunks to the server through the WebSocket.
-              mediaRecorder.ondataavailable = function(event) {
-                  if (wsSocket && wsSocket.readyState === WebSocket.OPEN) {
-                      wsSocket.send(event.data);
-                  }
-              };
-          } catch (error) {
-              displayNotification("Could not access microphone. Please allow microphone permissions.");
-              console.error("Microphone access error:", error);
-          }
-      } else {
-          // When stopping, stop the media recorder and close the WebSocket.
-          mediaRecorder.stop();
-          isRecording = false;
-          wsRecordButton.innerText = "Start Voice Input";
-          wsSocket.close();
-      }
-  });
-
-  // Append the voice input button to the add-entry section.
-  document.getElementById("add-entry-section").appendChild(wsRecordButton);
-</script>
-
 
   <script>
     // Helper function to render a note entry with edit and delete functionality.
@@ -607,5 +550,61 @@
     });
 
   </script>
+  <script>
+    const startBtn = document.getElementById("start-voice-button");
+    const stopBtn  = document.getElementById("stop-voice-button");
+    const textarea = document.getElementById("note-text");
+    let ws, audioContext, processor, mediaStream;
+
+    function log(msg, ...args) { console.log(msg, ...args); }
+
+    startBtn.addEventListener("click", async () => {
+      // 1️⃣ Open WebSocket
+      ws = new WebSocket(`ws://${window.location.host}/ws/voice`);
+      ws.binaryType = "arraybuffer";
+      ws.onopen    = () => log("🔌 WS OPEN");            // :contentReference[oaicite:9]{index=9}
+      ws.onerror   = e => log("⚠️ WS ERROR", e);         // :contentReference[oaicite:10]{index=10}
+      ws.onclose   = e => log("❌ WS CLOSED", e.code);   // :contentReference[oaicite:11]{index=11}
+      ws.onmessage = event => {
+        log("📩 WS MESSAGE", event.data);
+        textarea.value += event.data;                    // Append transcription
+      };
+
+      // 2️⃣ Capture mic audio
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioContext = new AudioContext({ sampleRate: 16000 });
+      const src     = audioContext.createMediaStreamSource(mediaStream);
+      processor     = audioContext.createScriptProcessor(4096, 1, 1);
+
+      src.connect(processor);
+      processor.connect(audioContext.destination);
+      processor.onaudioprocess = e => {
+        const floatData = e.inputBuffer.getChannelData(0);
+        const int16Data = new Int16Array(floatData.length);
+        for (let i = 0; i < floatData.length; i++) {
+          let s = Math.max(-1, Math.min(1, floatData[i]));
+          int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(int16Data.buffer);                    // Send PCM chunk
+        }
+      };
+
+      startBtn.style.display = "none";
+      stopBtn.style.display  = "inline";
+    });
+
+    stopBtn.addEventListener("click", () => {
+      // Tear down audio
+      processor.disconnect();
+      audioContext.close();
+      mediaStream.getTracks().forEach(t => t.stop());
+      // Close WS to trigger final transcription
+      ws.close();
+      stopBtn.style.display  = "none";
+      startBtn.style.display = "inline";
+    });
+  </script>
+
 </body>
 </html>
