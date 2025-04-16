@@ -1,20 +1,22 @@
 import logging
 import os
+import numpy as np
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from elasticsearch import Elasticsearch
 from openai import OpenAI
 
 from src.config import settings
-from src.database.schemas import NoteCreate, NoteOut
+from src.database.schemas import NoteCreate, NoteOut, PostprocessRequest, PostprocessResponse
 from src.database.notes_db import NotesDB
 from src.agents.notes_agent import NoteAgent
 from src.models.classification import NotesClassificationModel
 from src.models.search import NotesSearchModel
-from src.voice_asr import router as voice_asr_router
+from src.models.note_transcription_postprocessing import NoteTranscriptionPostprocessorModel
+from whisper_streaming.whisper_online import FasterWhisperASR, OnlineASRProcessor
 
 # --- Initialization ---
 client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
@@ -28,6 +30,7 @@ notes_db = NotesDB(es=es, index_name=INDEX_NAME, embeddings_dimension=EMBEDDINGS
 # Instantiate existing agents.
 classification_agent = NotesClassificationModel(client=client, db=notes_db)
 search_agent = NotesSearchModel(client=client, db=notes_db)
+postprocessor = NoteTranscriptionPostprocessorModel(client=client)
 
 # Instantiate our NoteAgent.
 note_agent = NoteAgent(
@@ -40,13 +43,60 @@ note_agent = NoteAgent(
 # --- FastAPI Application Setup ---
 app = FastAPI(title="Noted")
 app.mount("/static", StaticFiles(directory="static"), name="static")
-app.include_router(voice_asr_router)
 
 
 @app.get("/", response_class=FileResponse)
 def get_frontend():
 	return FileResponse("static/index.html")
 
+
+@app.post("/transcription/fix", response_model=PostprocessResponse)
+async def fix_transcription(request: PostprocessRequest):
+    """
+    HTTP endpoint to postprocess raw transcription text using the LLM.
+    """
+    corrected = postprocessor.postprocess(request.text)
+    return PostprocessResponse(corrected_text=corrected)
+
+@app.websocket("/ws/voice")
+async def voice_transcription(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time voice transcription using whisper_streaming.
+    """
+    await websocket.accept()
+    logging.info("Voice WebSocket connected")
+
+    # Initialize the Whisper ASR model.
+    asr = FasterWhisperASR("en", "large-v3-turbo")
+    online = OnlineASRProcessor(asr)
+
+    try:
+        while True:
+            # Receive raw audio and feed to ASR
+            audio_chunk = await websocket.receive_bytes()
+            online.insert_audio_chunk(
+                np.frombuffer(audio_chunk, dtype=np.int16).astype(np.float32) / 32768.0
+            )
+
+            for partial in online.process_iter():
+                text = str(partial).strip()
+                if not text or text.lower() == "none":
+                    continue
+                try:
+                    # Skip numeric-only outputs
+                    _ = float(text)
+                    continue
+                except ValueError:
+                    try:
+                        await websocket.send_text(text)
+                        logging.info("Sent transcription: %s", text)
+                    except Exception as e:
+                        logging.info("Error sending partial transcription: %s", e)
+                        return
+    except WebSocketDisconnect:
+        # Client initiated close; skip trying to send on closed WebSocket.
+        logging.info("Client disconnected. Skipping final WebSocket send; use HTTP POST '/transcription/fix' to retrieve final text.")
+        return
 
 @app.get("/topics", response_model=List[str])
 def get_topics():

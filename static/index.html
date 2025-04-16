@@ -105,11 +105,46 @@
       cursor: pointer;
       transition: background-color 0.3s ease, transform 0.2s ease;
     }
+    #search-form button {
+      font-size: 1.5rem;
+    }
 
     /* Hover effects for the arrow button */
     .arrow-button:hover {
       background-color: var(--primary-color-hover);
       transform: translateY(-1px);
+    }
+
+    #voice-buttons {
+      margin-top: 10px;
+      text-align: right;
+    }
+    #start-voice-button, #stop-voice-button {
+      font-size: 1rem;
+      margin-left: 5px;
+      cursor: pointer;
+    }
+
+    /* 1) Make the voice+arrow row a flex container */
+    #voice-buttons {
+      display: flex;
+      gap: 8px;           /* optional spacing between buttons */
+      margin-top: 10px;
+    }
+
+    /* 2) Override the global button width:100% for these buttons */
+    #voice-buttons button {
+      width: auto;
+    }
+
+    /* 3) Explicitly size them at 10% and 90% */
+    #start-voice-button,
+    #stop-voice-button {
+      flex: 0 0 7.5%;
+    }
+
+    #voice-buttons .arrow-button {
+      flex: 0 0 92.5%;
     }
 
     /* List Styles */
@@ -172,16 +207,6 @@
       display: inline-block;
       opacity: 1;
     }
-    #voice-buttons {
-      margin-top: 10px;
-      text-align: right;
-    }
-    #start-voice-button, #stop-voice-button {
-      padding: 8px 12px;
-      font-size: 1rem;
-      margin-left: 5px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
@@ -198,11 +223,9 @@
         <textarea id="note-text" rows="4" placeholder="What's on your mind?"></textarea>
         <!-- Voice input buttons -->
         <div id="voice-buttons">
-          <button type="button" id="start-voice-button">🎤 Start Voice</button>
-          <button type="button" id="stop-voice-button" style="display:none;">Stop Voice</button>
-        </div>
-        <div class="button-container">
-          <button type="submit" class="arrow-button">&#8593;</button>
+          <button type="button" id="start-voice-button">🎤</button>
+          <button type="button" id="stop-voice-button" style="display:none;">⏹️</button>
+          <button type="submit" class="arrow-button">⬆️</button>
         </div>
       </form>
     </div>
@@ -217,7 +240,7 @@
       <!-- Search Form -->
       <form id="search-form">
         <input type="text" id="search-query" placeholder="Search entries..." />
-        <button type="submit">Search</button>
+        <button type="submit">🔍</button>
       </form>
 
       <!-- Filter Options -->
@@ -560,7 +583,7 @@
 
     startBtn.addEventListener("click", async () => {
       // 1️⃣ Open WebSocket
-      ws = new WebSocket(`ws://${window.location.host}/ws/voice`);
+      ws = new WebSocket(`ws://192.168.0.124:8000/ws/voice`);
       ws.binaryType = "arraybuffer";
       ws.onopen    = () => log("🔌 WS OPEN");            // :contentReference[oaicite:9]{index=9}
       ws.onerror   = e => log("⚠️ WS ERROR", e);         // :contentReference[oaicite:10]{index=10}
@@ -594,16 +617,33 @@
       stopBtn.style.display  = "inline";
     });
 
-    stopBtn.addEventListener("click", () => {
-      // Tear down audio
-      processor.disconnect();
-      audioContext.close();
-      mediaStream.getTracks().forEach(t => t.stop());
-      // Close WS to trigger final transcription
-      ws.close();
-      stopBtn.style.display  = "none";
-      startBtn.style.display = "inline";
-    });
+  stopBtn.addEventListener("click", async () => {
+    // Tear down audio
+    processor.disconnect();
+    audioContext.close();
+    mediaStream.getTracks().forEach(t => t.stop());
+
+    // Close WS to trigger server finalization
+    ws.close();
+
+    // Once WS is closed (give it a moment), send full text for postprocessing
+    setTimeout(async () => {
+      try {
+        const response = await fetch("http://192.168.0.124:8000/transcription/fix", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: textarea.value }),
+        });
+        const { corrected_text } = await response.json();
+        textarea.value = corrected_text;
+      } catch (err) {
+        console.error("Postprocessing error:", err);
+      }
+    }, 200);
+
+    stopBtn.style.display  = "none";
+    startBtn.style.display = "inline";
+  });
   </script>
 
 </body>
