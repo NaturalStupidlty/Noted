@@ -15,3 +15,11 @@ class NoteOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class PostprocessRequest(BaseModel):
+    text: str
+
+
+class PostprocessResponse(BaseModel):
+    corrected_text: str

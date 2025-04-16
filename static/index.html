@@ -105,11 +105,46 @@
       cursor: pointer;
       transition: background-color 0.3s ease, transform 0.2s ease;
     }
+    #search-form button {
+      font-size: 1.5rem;
+    }
 
     /* Hover effects for the arrow button */
     .arrow-button:hover {
       background-color: var(--primary-color-hover);
       transform: translateY(-1px);
+    }
+
+    #voice-buttons {
+      margin-top: 10px;
+      text-align: right;
+    }
+    #start-voice-button, #stop-voice-button {
+      font-size: 1rem;
+      margin-left: 5px;
+      cursor: pointer;
+    }
+
+    /* 1) Make the voice+arrow row a flex container */
+    #voice-buttons {
+      display: flex;
+      gap: 8px;           /* optional spacing between buttons */
+      margin-top: 10px;
+    }
+
+    /* 2) Override the global button width:100% for these buttons */
+    #voice-buttons button {
+      width: auto;
+    }
+
+    /* 3) Explicitly size them at 10% and 90% */
+    #start-voice-button,
+    #stop-voice-button {
+      flex: 0 0 7.5%;
+    }
+
+    #voice-buttons .arrow-button {
+      flex: 0 0 92.5%;
     }
 
     /* List Styles */
@@ -180,14 +215,17 @@
     <div id="notification" class="notification" style="display:none;"></div>
 
     <!-- Title -->
-    <h1>Noted</h1>
+    <h1>📝 Noted</h1>
 
     <!-- Add Item Section -->
     <div class="section" id="add-entry-section">
       <form id="add-note-form">
         <textarea id="note-text" rows="4" placeholder="What's on your mind?"></textarea>
-        <div class="button-container">
-          <button type="submit" class="arrow-button">&#8593;</button>
+        <!-- Voice input buttons -->
+        <div id="voice-buttons">
+          <button type="button" id="start-voice-button">🎤</button>
+          <button type="button" id="stop-voice-button" style="display:none;">⏹️</button>
+          <button type="submit" class="arrow-button">⬆️</button>
         </div>
       </form>
     </div>
@@ -201,8 +239,8 @@
     <div class="section" id="search-filter-section">
       <!-- Search Form -->
       <form id="search-form">
-        <input type="text" id="search-query" placeholder="Search entries..." />
-        <button type="submit">Search</button>
+        <input type="text" id="search-query" placeholder="Search..." />
+        <button type="submit">🔍</button>
       </form>
 
       <!-- Filter Options -->
@@ -459,6 +497,7 @@
         displayFilteredEntries();
         // Remove any instance of the note in the recent list.
         document.querySelectorAll(`li[data-note-id="${noteId}"]`).forEach(el => el.remove());
+        await loadTopics();
       } catch (error) {
         displayNotification("Network error: Could not delete note.");
         console.error("Error deleting note.", error);
@@ -487,53 +526,136 @@
       loadRecentEntries();
     });
 
-    // Add Item Event Listener.
+    // Add Item Event Listener
     document.getElementById("add-note-form").addEventListener("submit", async function(event) {
       event.preventDefault();
+
       const noteText = document.getElementById("note-text").value.trim();
-      if (!noteText) {
-        return;
-      }
+      if (!noteText) return;
+
       try {
         const response = await fetch("/notes/create", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: noteText })
         });
-        if (response.ok) {
-          const newEntry = await response.json();
-
-          // Optionally update the "all entries" and "filtered entries" lists.
-          await updateEntries();
-
-          // Immediately update the recent list UI.
-          const recentSection = document.getElementById("recent-section");
-          const recentList = document.getElementById("recent-list");
-
-          // Ensure the section is visible in case it was hidden.
-          recentSection.style.display = "block";
-
-          // Render and prepend the new note.
-          const newNoteElement = renderNoteEntry(newEntry);
-          recentList.insertBefore(newNoteElement, recentList.firstChild);
-
-          // Clear the input field.
-          document.getElementById("note-text").value = "";
-
-          // Optionally refresh recent entries from server to stay in sync:
-          await loadRecentEntries();
-
-        } else {
+        if (!response.ok) {
           const errorData = await response.json();
           displayNotification(errorData.detail || "Error adding entry.");
-          console.error("Error adding entry.");
+          return;
         }
+
+        const payload = await response.json();
+
+        if (Array.isArray(payload)) {
+          // ——— search results returned ———
+          allEntriesData = payload;
+          displayFilteredEntries();
+
+        } else {
+          // ——— single new/updated note ———
+          const newEntry = payload;
+          // update unified view (will show this new note among all)
+          await updateEntries();
+
+          // prepend to “Recent”
+          const recentList = document.getElementById("recent-list");
+          recentList.insertBefore(renderNoteEntry(newEntry), recentList.firstChild);
+        }
+
+        // clear the input and refresh “Recent” panel
+        document.getElementById("note-text").value = "";
+        await loadRecentEntries();
+        await loadTopics();
+
       } catch (error) {
         displayNotification("Network error: Could not add entry.");
         console.error("Error adding entry.", error);
       }
     });
 
+
   </script>
+  <script>
+    const startBtn = document.getElementById("start-voice-button");
+    const stopBtn = document.getElementById("stop-voice-button");
+    const textarea = document.getElementById("note-text");
+    let ws, audioContext, processor, mediaStream;
+
+    function log(msg, ...args) {
+      console.log(msg, ...args);
+    }
+
+    startBtn.addEventListener("click", async () => {
+      // 1️⃣ Open WebSocket
+      ws = new WebSocket(`ws://192.168.0.124:8000/ws/voice`);
+      ws.binaryType = "arraybuffer";
+      ws.onopen = () => log("🔌 WS OPEN");            // :contentReference[oaicite:9]{index=9}
+      ws.onerror = e => log("⚠️ WS ERROR", e);         // :contentReference[oaicite:10]{index=10}
+      ws.onclose = e => log("❌ WS CLOSED", e.code);   // :contentReference[oaicite:11]{index=11}
+      ws.onmessage = event => {
+        log("📩 WS MESSAGE", event.data);
+        textarea.value += event.data;                    // Append transcription
+      };
+
+      // 2️⃣ Capture mic audio
+      mediaStream = await navigator.mediaDevices.getUserMedia({audio: true});
+      audioContext = new AudioContext({sampleRate: 16000});
+      const src = audioContext.createMediaStreamSource(mediaStream);
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+      src.connect(processor);
+      processor.connect(audioContext.destination);
+      processor.onaudioprocess = e => {
+        const floatData = e.inputBuffer.getChannelData(0);
+        const int16Data = new Int16Array(floatData.length);
+        for (let i = 0; i < floatData.length; i++) {
+          let s = Math.max(-1, Math.min(1, floatData[i]));
+          int16Data[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(int16Data.buffer);                    // Send PCM chunk
+        }
+      };
+
+      startBtn.style.display = "none";
+      stopBtn.style.display = "inline";
+    });
+
+    stopBtn.addEventListener("click", async () => {
+    // Tear down audio
+    processor.disconnect();
+    audioContext.close();
+    mediaStream.getTracks().forEach(t => t.stop());
+
+    // Close WS to trigger server finalization
+    ws.close();
+
+    // Once WS is closed (give it a moment), send full text for postprocessing
+    setTimeout(async () => {
+    const rawText = textarea.value.trim();
+    if (!rawText) {
+    console.log("Transcription is empty, skipping postprocessing.");
+    return;
+  }
+
+    try {
+    const response = await fetch("http://192.168.0.124:8000/transcription/fix", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({text: rawText}),
+  });
+    const {corrected_text} = await response.json();
+    textarea.value = corrected_text;
+  } catch (err) {
+    console.error("Postprocessing error:", err);
+  }
+  }, 200);
+
+    stopBtn.style.display  = "none";
+    startBtn.style.display = "inline";
+  });
+  </script>
+
 </body>
 </html>

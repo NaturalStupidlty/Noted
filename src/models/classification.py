@@ -23,10 +23,9 @@ class NotesClassificationModel:
             "Below is a list of current topics from previous notes: "
             f"{topics_context}. "
             "Given the note content, identify if it is a 'note' or a 'todo', and then determine "
-            "the most appropriate short topic from the list. "
+            "an appropriate short topic. If the list is short or none of the topics match well, propose a new one. "
             "If the note contains an action that needs to be done, classify it as 'todo'. "
             "If the note is a general observation or information, classify it as 'note'. "
-            "If none of the topics match well, propose a new one. "
             "Return only the two answers as a comma-separated list (for example: 'todo, shopping')."
         )
         try:
