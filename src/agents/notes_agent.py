@@ -18,12 +18,15 @@ class NoteAgent:
     INSTRUCTIONS = (
         "You are a helpful note agent. Given a user's input, decide if it is a plain note or a request command. "
         "A plain note means the user wants to simply store a note, and you should output action 'plain_note'. "
+        "Request commands contain instructions for note management or asking in some way. "
         "If the input is a command, decide among the following actions and extract additional information if needed: "
         " - 'create_note' if the user wants to create a note from a command; "
         " - 'update_note' if the user wants to modify an existing note (search query must be used to find the relevant note id); "
         " - 'search_note' if the user wants to search for notes; "
         " - 'delete_note' if the user wants to delete a note (search query must be used to find the relevant note id). "
         "Return a valid JSON object with the following keys: 'action', 'note_text', 'note_id', and 'search_query'. "
+        "'note_text' is the actual information in the note to be created or updated, it should contain the meaning of "
+        "the user`s input (may not be exact text). "
         "If some information is not applicable, set its value to null. Do not include any additional commentary."
     )
 

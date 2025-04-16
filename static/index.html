@@ -497,6 +497,7 @@
         displayFilteredEntries();
         // Remove any instance of the note in the recent list.
         document.querySelectorAll(`li[data-note-id="${noteId}"]`).forEach(el => el.remove());
+        await loadTopics();
       } catch (error) {
         displayNotification("Network error: Could not delete note.");
         console.error("Error deleting note.", error);
@@ -565,6 +566,7 @@
         // clear the input and refresh “Recent” panel
         document.getElementById("note-text").value = "";
         await loadRecentEntries();
+        await loadTopics();
 
       } catch (error) {
         displayNotification("Network error: Could not add entry.");
@@ -576,29 +578,31 @@
   </script>
   <script>
     const startBtn = document.getElementById("start-voice-button");
-    const stopBtn  = document.getElementById("stop-voice-button");
+    const stopBtn = document.getElementById("stop-voice-button");
     const textarea = document.getElementById("note-text");
     let ws, audioContext, processor, mediaStream;
 
-    function log(msg, ...args) { console.log(msg, ...args); }
+    function log(msg, ...args) {
+      console.log(msg, ...args);
+    }
 
     startBtn.addEventListener("click", async () => {
       // 1️⃣ Open WebSocket
       ws = new WebSocket(`ws://192.168.0.124:8000/ws/voice`);
       ws.binaryType = "arraybuffer";
-      ws.onopen    = () => log("🔌 WS OPEN");            // :contentReference[oaicite:9]{index=9}
-      ws.onerror   = e => log("⚠️ WS ERROR", e);         // :contentReference[oaicite:10]{index=10}
-      ws.onclose   = e => log("❌ WS CLOSED", e.code);   // :contentReference[oaicite:11]{index=11}
+      ws.onopen = () => log("🔌 WS OPEN");            // :contentReference[oaicite:9]{index=9}
+      ws.onerror = e => log("⚠️ WS ERROR", e);         // :contentReference[oaicite:10]{index=10}
+      ws.onclose = e => log("❌ WS CLOSED", e.code);   // :contentReference[oaicite:11]{index=11}
       ws.onmessage = event => {
         log("📩 WS MESSAGE", event.data);
         textarea.value += event.data;                    // Append transcription
       };
 
       // 2️⃣ Capture mic audio
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioContext = new AudioContext({ sampleRate: 16000 });
-      const src     = audioContext.createMediaStreamSource(mediaStream);
-      processor     = audioContext.createScriptProcessor(4096, 1, 1);
+      mediaStream = await navigator.mediaDevices.getUserMedia({audio: true});
+      audioContext = new AudioContext({sampleRate: 16000});
+      const src = audioContext.createMediaStreamSource(mediaStream);
+      processor = audioContext.createScriptProcessor(4096, 1, 1);
 
       src.connect(processor);
       processor.connect(audioContext.destination);
@@ -615,10 +619,10 @@
       };
 
       startBtn.style.display = "none";
-      stopBtn.style.display  = "inline";
+      stopBtn.style.display = "inline";
     });
 
-  stopBtn.addEventListener("click", async () => {
+    stopBtn.addEventListener("click", async () => {
     // Tear down audio
     processor.disconnect();
     audioContext.close();
@@ -629,18 +633,24 @@
 
     // Once WS is closed (give it a moment), send full text for postprocessing
     setTimeout(async () => {
-      try {
-        const response = await fetch("http://192.168.0.124:8000/transcription/fix", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text: textarea.value }),
-        });
-        const { corrected_text } = await response.json();
-        textarea.value = corrected_text;
-      } catch (err) {
-        console.error("Postprocessing error:", err);
-      }
-    }, 200);
+    const rawText = textarea.value.trim();
+    if (!rawText) {
+    console.log("Transcription is empty, skipping postprocessing.");
+    return;
+  }
+
+    try {
+    const response = await fetch("http://192.168.0.124:8000/transcription/fix", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({text: rawText}),
+  });
+    const {corrected_text} = await response.json();
+    textarea.value = corrected_text;
+  } catch (err) {
+    console.error("Postprocessing error:", err);
+  }
+  }, 200);
 
     stopBtn.style.display  = "none";
     startBtn.style.display = "inline";
